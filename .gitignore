@@ -5,10 +5,8 @@ __pycache__/
 .env
 instance/
 
-# ansible_runner가 진단 실행마다 생성하는 런타임 산출물(SSH 소켓/이벤트 로그/
-# 실서버 정보가 담긴 인벤토리 등) - 코드가 아니라 실행 결과물이라 커밋 대상 아님
-ansible/artifacts/
-ansible/env/
-ansible/inventory/
-ansible/scripts/*/run_all.err
+# ansible/ 전체는 로컬 실행에만 필요한 산출물+실행 스크립트 사본이라 git 추적 대상이
+# 아님(플레이북 원본/점검 스크립트 원본은 security-platform 레포에 있음). 로컬엔
+# 그대로 두되(대시보드가 실행 시 이 경로를 읽음) 커밋만 안 함.
+ansible/
 scan_results/*.json
