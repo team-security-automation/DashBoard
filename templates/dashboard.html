@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}대시보드{% endblock %}
+{% block page_title %}대시보드{% endblock %}
+{% block page_sub %}<p class="page-sub">전체 {{ server_count }}대 서버 · 마지막 진단 기준 현황</p>{% endblock %}
+
+{% block topbar_actions %}
+<a class="btn btn-ghost btn-sm" href="{{ url_for('reports.excel_report', server_id='all') }}">Excel 다운로드</a>
+<a class="btn btn-ghost btn-sm" href="{{ url_for('reports.pdf_report', server_id='all') }}">PDF 다운로드</a>
+<a class="btn btn-primary btn-sm" href="{{ url_for('diagnosis.index') }}">진단 실행</a>
+{% endblock %}
+
+{% block content %}
+
+<section class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-label">전체 평균 보안점수</div>
+    <div class="kpi-value">{{ avg_score }}<small>/100</small></div>
+    <span class="pill pill-{{ avg_color }}">{{ avg_grade }}</span>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">주간 변화 (7일)</div>
+    {% if week_delta is not none %}
+      <div class="kpi-value kpi-delta {{ 'up' if week_delta >= 0 else 'down' }}">
+        {{ '+' if week_delta >= 0 else '' }}{{ week_delta }}
+      </div>
+      <span class="kpi-sub">{{ '개선 추세' if week_delta >= 0 else '악화 추세' }}</span>
+    {% else %}
+      <div class="kpi-value">-</div>
+      <span class="kpi-sub">데이터 누적 중</span>
+    {% endif %}
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">진단 대상 서버</div>
+    <div class="kpi-value">{{ server_count }}<small>대</small></div>
+    <span class="kpi-sub">Rocky 2 · Ubuntu 2 · 웹/DB 1</span>
+  </div>
+  <div class="kpi-card kpi-card-alert">
+    <div class="kpi-label">미조치 Critical(상) 항목</div>
+    <div class="kpi-value">{{ critical_open }}<small>건</small></div>
+    <span class="kpi-sub">위험도 상(H) · 전체 서버 합산</span>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">승인 대기</div>
+    <div class="kpi-value">{{ pending_approvals }}<small>건</small></div>
+    <a class="kpi-link" href="{{ url_for('approvals.list_approvals') }}">승인함 바로가기 →</a>
+  </div>
+</section>
+
+<section class="server-strip">
+  {% for row in server_scores %}
+  <a class="server-chip" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">
+    <div class="server-chip-top">
+      <span class="mono">{{ row.server.hostname }}</span>
+      <span class="pill pill-{{ row.color }} pill-xs">{{ row.grade }}</span>
+    </div>
+    <div class="server-chip-score">{{ row.level }}</div>
+    <div class="bar-track"><div class="bar-fill bar-{{ row.color }}" style="width:{{ row.level }}%"></div></div>
+    <div class="server-chip-sub">{{ row.server.os_label }} · {{ row.server.role_desc }}</div>
+  </a>
+  {% endfor %}
+</section>
+
+<section class="panel heatmap-wrap">
+  <div class="panel-title">
+    <span>서버 × 점검항목 히트맵</span>
+    <span class="panel-title-sub">셀을 클릭하면 상세 진단 결과로 이동합니다</span>
+  </div>
+  <div class="heatmap-legend">
+    <span><i class="legend-dot legend-good"></i>양호</span>
+    <span><i class="legend-dot legend-vuln-H"></i>취약·상</span>
+    <span><i class="legend-dot legend-vuln-M"></i>취약·중</span>
+    <span><i class="legend-dot legend-vuln-L"></i>취약·하</span>
+    <span><i class="legend-dot legend-na"></i>N/A(수동확인)</span>
+  </div>
+  <div class="heatmap-scroll">
+    <table class="heatmap">
+      <thead>
+        <tr>
+          <th class="server-col corner"></th>
+          {% for cat, cis in heatmap_categories.items() %}
+            <th class="cat-head" colspan="{{ cis|length }}">{{ cat }}</th>
+          {% endfor %}
+        </tr>
+        <tr>
+          <th class="server-col corner"></th>
+          {% for cat, cis in heatmap_categories.items() %}
+            {% for ci in cis %}
+              <th class="code-head" title="{{ ci.code }} · {{ ci.name }}"><span>{{ ci.code }}</span></th>
+            {% endfor %}
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in heatmap_rows %}
+        <tr>
+          <th class="server-col">{{ row.server.hostname }}</th>
+          {% for cell in row.cells %}
+            <td>
+              <a class="hm-cell {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else 'vuln-' ~ cell.risk) }}"
+                 href="{{ url_for('servers.server_detail', server_id=row.server.id, q=cell.code) }}"
+                 title="{{ row.server.hostname }} · {{ cell.code }} {{ cell.name }} ({{ RISK_LABEL.get(cell.risk, cell.risk) }}) · {{ cell.label }}"></a>
+            </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="grid-2">
+  <div class="panel">
+    <div class="panel-title">
+      <span>위험도 기반 조치 우선순위</span>
+      <span class="panel-title-sub">배점 × 영향받는 서버 수</span>
+    </div>
+    {% if priority_queue %}
+    <div class="priority-list">
+      {% for p in priority_queue %}
+      <div class="priority-item">
+        <span class="priority-rank">{{ loop.index }}</span>
+        <span class="priority-code">{{ p.item.code }}</span>
+        <span class="priority-meta">
+          <strong>{{ p.item.name }}</strong>
+          <span class="priority-servers">
+            {{ RISK_LABEL.get(p.item.risk_level, p.item.risk_level) }} 위험 · 영향 서버 {{ p.count }}대 ·
+            {% for a in p.affected %}<a class="server-link" href="{{ url_for('servers.server_detail', server_id=a.id, q=p.item.code) }}">{{ a.hostname }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+          </span>
+        </span>
+        <span class="priority-impact" title="위험도 배점 × 영향 서버 수">{{ p.impact }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-note">현재 취약으로 진단된 항목이 없습니다.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>카테고리별 컴플라이언스 준수율</span>
+      <span class="panel-title-sub">전체 서버 합산</span>
+    </div>
+    {% for c in category_chart %}
+    <div class="compliance-row">
+      <span class="compliance-label">{{ c.category }}</span>
+      <div class="bar-track">
+        <div class="bar-fill {{ 'bar-good' if c.compliance >= 80 else ('bar-warn' if c.compliance >= 60 else 'bar-bad') }}"
+             style="width:{{ c.compliance }}%"></div>
+      </div>
+      <span class="compliance-value mono">{{ c.compliance }}%</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="grid-2">
+  <div class="panel">
+    <div class="panel-title">
+      <span>카테고리별 위험 분포</span>
+      <span class="panel-title-sub">취약 건수(전체 서버 합산)</span>
+    </div>
+    <canvas id="categoryChart" height="220"></canvas>
+  </div>
+  <div class="panel">
+    <div class="panel-title">
+      <span>전체 평균 보안점수 추세</span>
+      <span class="panel-title-sub">최근 14일</span>
+    </div>
+    <canvas id="trendChart" height="220"></canvas>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const categoryLabels = {{ category_chart | map(attribute='category') | list | tojson }};
+  const categoryVuln = {{ category_chart | map(attribute='vuln') | list | tojson }};
+  const trendLabels = {{ trend_labels | tojson }};
+  const trendValues = {{ trend_values | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

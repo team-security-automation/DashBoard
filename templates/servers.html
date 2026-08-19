@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}서버 관리{% endblock %}
+{% block page_title %}서버 관리{% endblock %}
+{% block page_sub %}<p class="page-sub">진단 대상 서버 등록 · 수정 · 삭제</p>{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role == 'admin' %}
+<button class="btn btn-ghost btn-sm" onclick="document.getElementById('csvModal').classList.add('open')">CSV 일괄 등록</button>
+<a class="btn btn-primary btn-sm" href="{{ url_for('servers.new_server') }}">+ 서버 등록</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <table class="data">
+    <thead>
+      <tr>
+        <th>호스트명</th><th>IP</th><th>OS</th><th>구분</th><th>업무명</th><th>담당자</th>
+        <th>보안점수</th><th>등급</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="mono">
+          <a href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">{{ row.server.hostname }}</a>
+          {% if not row.server.ssh_key_path %}<span class="pill pill-warn pill-xs" title="Ansible 인벤토리에서 제외됨">SSH 미설정</span>{% endif %}
+        </td>
+        <td class="mono">{{ row.server.ip }}</td>
+        <td>{{ row.server.os_label }}</td>
+        <td>{{ row.server.role_desc }}{% if row.server.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
+        <td>{{ row.server.business_name }}</td>
+        <td>{{ row.server.owner }}</td>
+        <td class="mono">{{ row.level }}</td>
+        <td><span class="pill pill-{{ row.color }}">{{ row.grade }}</span></td>
+        <td class="row-actions">
+          <a class="btn btn-ghost btn-xs" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">상세</a>
+          {% if current_user.role == 'admin' %}
+          <a class="btn btn-ghost btn-xs" href="{{ url_for('servers.edit_server', server_id=row.server.id) }}">수정</a>
+          <form method="post" action="{{ url_for('servers.delete_server', server_id=row.server.id) }}"
+                onsubmit="return confirm('서버 {{ row.server.hostname }}를 삭제할까요? 관련 진단 이력도 함께 삭제됩니다.');" style="display:inline">
+            <button class="btn btn-danger btn-xs" type="submit">삭제</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="csvModal">
+  <div class="modal">
+    <h3>CSV 일괄 등록</h3>
+    <p class="modal-desc">헤더: <span class="mono">hostname,ip,os_family,os_version,role_desc,business_name,owner</span></p>
+    <form method="post" action="{{ url_for('servers.upload_csv') }}" enctype="multipart/form-data">
+      <input type="file" name="csv_file" accept=".csv" required>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('csvModal').classList.remove('open')">취소</button>
+        <button type="submit" class="btn btn-primary">업로드</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

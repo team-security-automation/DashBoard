@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}조치 승인{% endblock %}
+{% block page_title %}조치 승인{% endblock %}
+{% block page_sub %}<p class="page-sub">미리보기(dry-run) → 실무자 승인 요청 → 승인자 승인/거부 → 자동 재진단 → 전후비교</p>{% endblock %}
+
+{% block content %}
+<section class="tab-bar">
+  <a class="tab {{ 'active' if status == 'pending' }}" href="{{ url_for('approvals.list_approvals', status='pending') }}">대기중 <span>{{ counts.pending }}</span></a>
+  <a class="tab {{ 'active' if status == 'approved' }}" href="{{ url_for('approvals.list_approvals', status='approved') }}">승인됨 <span>{{ counts.approved }}</span></a>
+  <a class="tab {{ 'active' if status == 'rejected' }}" href="{{ url_for('approvals.list_approvals', status='rejected') }}">거부됨 <span>{{ counts.rejected }}</span></a>
+  <a class="tab {{ 'active' if status == 'all' }}" href="{{ url_for('approvals.list_approvals', status='all') }}">전체 <span>{{ counts.all }}</span></a>
+</section>
+
+<div class="panel">
+  {% if reqs %}
+  <table class="data">
+    <thead>
+      <tr><th>요청일시</th><th>서버</th><th>항목</th><th>위험도</th><th>요청자</th><th>상태</th><th>승인자</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in reqs %}
+      <tr>
+        <td class="mono">{{ r.requested_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="mono">{{ r.server.hostname }}</td>
+        <td><span class="mono">{{ r.check_item.code }}</span> {{ r.check_item.name }}</td>
+        <td><span class="pill pill-risk-{{ r.check_item.risk_level }} pill-xs">{{ RISK_LABEL[r.check_item.risk_level] }}</span></td>
+        <td>{{ r.requested_by }}</td>
+        <td>
+          {% if r.status == 'pending' %}<span class="pill pill-warn pill-xs">대기</span>
+          {% elif r.status == 'approved' %}<span class="pill pill-good pill-xs">승인</span>
+          {% else %}<span class="pill pill-vuln pill-xs">거부</span>{% endif %}
+        </td>
+        <td>{{ r.approver or '-' }}</td>
+        <td><a class="btn btn-ghost btn-xs" href="{{ url_for('approvals.detail', req_id=r.id) }}">상세</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-note">해당 상태의 조치 승인 요청이 없습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}

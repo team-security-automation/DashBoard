@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}진단 실행{% endblock %}
+{% block page_title %}진단 실행{% endblock %}
+{% block page_sub %}<p class="page-sub">Ansible 병렬 진단(forks=5) — IP 확인 → SSH 병렬 실행 → JSON 결과 회수 → DB 적재</p>{% endblock %}
+
+{% block content %}
+{% if use_real_ansible %}
+  <div class="flash flash-success" style="margin:0">실제 모드 — 진단 실행 시 대상 서버에 실제로 SSH 접속합니다 (USE_REAL_ANSIBLE=true).</div>
+{% else %}
+  <div class="flash flash-warning" style="margin:0">시뮬레이션 모드 — 실제 SSH 접속 없이 직전 결과를 재적재합니다.
+    config.py의 USE_REAL_ANSIBLE을 켜면 실제 진단으로 전환됩니다.</div>
+{% endif %}
+{% if missing_ssh %}
+  <div class="flash flash-danger">SSH 키 경로가 설정되지 않은 서버: {{ missing_ssh|map(attribute='hostname')|join(', ') }}
+    — 실제 모드에서는 이 서버들이 인벤토리에서 제외되어 진단되지 않습니다. 서버 수정 화면에서 설정하세요.</div>
+{% endif %}
+
+<section class="grid-2">
+  <div class="panel">
+    <div class="panel-title"><span>서버 선택 후 진단 실행</span></div>
+
+    {% if not current_user.can_run_diagnosis() %}
+      <p class="empty-note">진단 실행은 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('diagnosis.run_scan') }}" id="scanForm">
+      <table class="data data-compact">
+        <thead>
+          <tr>
+            <th style="width:36px"><input type="checkbox" id="checkAll"></th>
+            <th>호스트명</th><th>OS</th><th>역할</th><th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in servers %}
+          <tr>
+            <td><input type="checkbox" name="server_ids" value="{{ s.id }}" class="srv-check"></td>
+            <td class="mono">{{ s.hostname }}</td>
+            <td>{{ s.os_label }}</td>
+            <td>{{ s.role_desc }}{% if s.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
+            <td class="mono">{{ s.ip }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="form-actions">
+        <span class="text-muted" id="selCount">선택된 서버 없음 (미선택 시 전체 실행)</span>
+        <button type="submit" class="btn btn-primary" {{ 'disabled' if not current_user.can_run_diagnosis() }}>
+          진단 실행
+        </button>
+      </div>
+    </form>
+
+    <div class="progress-box" id="progressBox" style="display:none">
+      <div class="progress-head">
+        <span id="progressLabel">진단 진행 중...</span>
+        <span id="progressCount" class="mono">0 / 0</span>
+      </div>
+      <div class="bar-track progress-track"><div class="bar-fill bar-accent" id="progressBar" style="width:0%"></div></div>
+      <div class="progress-servers" id="progressServers"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span>실행 이력</span></div>
+    <table class="data data-compact">
+      <thead><tr><th>시작 시각</th><th>대상</th><th>소요</th><th>상태</th><th>실행자</th></tr></thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td class="mono">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>{{ r.total }}대</td>
+          <td class="mono">
+            {% if r.finished_at %}{{ ((r.finished_at - r.started_at).total_seconds())|round(0)|int }}초{% else %}-{% endif %}
+          </td>
+          <td>
+            {% if r.status == 'completed' %}<span class="pill pill-good pill-xs">완료</span>
+            {% else %}<span class="pill pill-warn pill-xs">진행중</span>{% endif %}
+          </td>
+          <td>{{ r.triggered_by }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const checkAll = document.getElementById('checkAll');
+  const checks = document.querySelectorAll('.srv-check');
+  const selCount = document.getElementById('selCount');
+
+  function updateSelCount() {
+    const n = document.querySelectorAll('.srv-check:checked').length;
+    selCount.textContent = n === 0 ? '선택된 서버 없음 (미선택 시 전체 실행)' : `${n}대 선택됨`;
+  }
+  checkAll && checkAll.addEventListener('change', () => {
+    checks.forEach(c => c.checked = checkAll.checked);
+    updateSelCount();
+  });
+  checks.forEach(c => c.addEventListener('change', updateSelCount));
+
+  {% if active_run %}
+  window.ACTIVE_RUN_ID = {{ active_run.id }};
+  {% endif %}
+  {% if request.args.get('run_id') %}
+  window.ACTIVE_RUN_ID = {{ request.args.get('run_id') }};
+  {% endif %}
+</script>
+<script src="{{ url_for('static', filename='js/diagnosis.js') }}"></script>
+{% endblock %}

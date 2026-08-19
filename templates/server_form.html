@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ '서버 수정' if server else '서버 등록' }}{% endblock %}
+{% block page_title %}{{ '서버 수정' if server else '서버 개별 등록' }}{% endblock %}
+
+{% block content %}
+<div class="panel panel-form">
+  <form method="post">
+    <div class="form-grid">
+      <div class="field">
+        <label>호스트명</label>
+        <input type="text" name="hostname" value="{{ server.hostname if server else '' }}" required>
+      </div>
+      <div class="field">
+        <label>IP</label>
+        <input type="text" name="ip" value="{{ server.ip if server else '' }}" required>
+      </div>
+      <div class="field">
+        <label>OS</label>
+        <input type="text" name="os_family" placeholder="Rocky Linux / Ubuntu"
+               value="{{ server.os_family if server else '' }}" required>
+      </div>
+      <div class="field">
+        <label>OS 버전</label>
+        <input type="text" name="os_version" placeholder="9 / 24.04"
+               value="{{ server.os_version if server else '' }}" required>
+      </div>
+      <div class="field">
+        <label>서버 역할</label>
+        <input type="text" name="role_desc" placeholder="WAS / 웹서버+DB 등"
+               value="{{ server.role_desc if server else '' }}">
+      </div>
+      <div class="field">
+        <label>업무명</label>
+        <input type="text" name="business_name" value="{{ server.business_name if server else '' }}">
+      </div>
+      <div class="field">
+        <label>업무팀</label>
+        <input type="text" name="business_team" value="{{ server.business_team if server else '' }}">
+      </div>
+      <div class="field">
+        <label>담당자</label>
+        <input type="text" name="owner" value="{{ server.owner if server else '' }}">
+      </div>
+      <div class="field">
+        <label>자산등급</label>
+        <select name="asset_grade">
+          {% for g in ['1등급', '2등급', '3등급'] %}
+          <option value="{{ g }}" {{ 'selected' if server and server.asset_grade == g else '' }}>{{ g }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field field-checkbox">
+        <label>
+          <input type="checkbox" name="is_web_db" {{ 'checked' if server and server.is_web_db else '' }}>
+          웹서버+DB 대상 (Web Application 21항목 추가 적용)
+        </label>
+      </div>
+    </div>
+
+    <div class="panel-title" style="margin-top:24px"><span>SSH 접속 정보 (Ansible 인벤토리용)</span></div>
+    <p class="modal-desc">비밀번호는 저장하지 않습니다. 컨트롤 노드에 미리 배포해 둔 SSH 개인키의
+      <strong>경로</strong>만 입력하세요 (예: /etc/ansible/keys/{{ server.hostname if server else 'hostname' }}.pem).</p>
+    <div class="form-grid">
+      <div class="field">
+        <label>SSH 계정</label>
+        <input type="text" name="ssh_user" value="{{ server.ssh_user if server else 'ansible' }}">
+      </div>
+      <div class="field">
+        <label>SSH 포트</label>
+        <input type="text" name="ssh_port" value="{{ server.ssh_port if server else 22 }}">
+      </div>
+      <div class="field" style="grid-column: 1 / -1">
+        <label>SSH 개인키 경로 (컨트롤 노드 기준)</label>
+        <input type="text" name="ssh_key_path" placeholder="/etc/ansible/keys/rocky01.pem"
+               value="{{ server.ssh_key_path if server else '' }}">
+      </div>
+      <div class="field field-checkbox">
+        <label>
+          <input type="checkbox" name="ssh_become" {{ 'checked' if (server is none) or (server and server.ssh_become) else '' }}>
+          sudo 권한으로 실행 (become: yes) — 대부분의 점검 스크립트에 필요
+        </label>
+      </div>
+    </div>
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{{ url_for('servers.list_servers') }}">취소</a>
+      <button type="submit" class="btn btn-primary">{{ '저장' if server else '등록' }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

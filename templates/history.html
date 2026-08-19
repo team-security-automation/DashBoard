@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}이력 관리{% endblock %}
+{% block page_title %}이력 관리{% endblock %}
+{% block page_sub %}<p class="page-sub">보안점수 시계열 추세 및 조치 이력</p>{% endblock %}
+
+{% block content %}
+<section class="grid-2">
+  <div class="panel">
+    <div class="panel-title">
+      <span>{{ title }} 추세</span>
+      <form method="get" class="inline-form">
+        <select name="server_id" onchange="this.form.submit()">
+          <option value="all" {{ 'selected' if sel == 'all' else '' }}>전체 서버 평균</option>
+          {% for s in servers %}
+          <option value="{{ s.id }}" {{ 'selected' if sel == (s.id|string) else '' }}>{{ s.hostname }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+    <canvas id="historyChart" height="220"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span>서버별 최신 점수 비교</span></div>
+    {% for c in compare %}
+    <div class="compliance-row">
+      <span class="compliance-label mono">{{ c.hostname }}</span>
+      <div class="bar-track">
+        <div class="bar-fill {{ 'bar-good' if c.grade in ['우수','양호'] else ('bar-warn' if c.grade == '보통' else 'bar-bad') }}"
+             style="width:{{ c.score }}%"></div>
+      </div>
+      <span class="compliance-value mono">{{ c.score }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title"><span>조치 이력</span></div>
+  {% if action_history %}
+  <table class="data data-compact">
+    <thead>
+      <tr><th>수행일시</th><th>서버</th><th>항목</th><th>이전</th><th>→</th><th>이후</th><th>수행자</th><th>백업</th></tr>
+    </thead>
+    <tbody>
+      {% for h in action_history %}
+      <tr>
+        <td class="mono">{{ h.performed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="mono">{{ h.server.hostname }}</td>
+        <td><span class="mono">{{ h.check_item.code }}</span> {{ h.check_item.name }}</td>
+        <td><span class="pill pill-vuln pill-xs">취약</span> <span class="mono">{{ h.before_score }}</span></td>
+        <td>→</td>
+        <td><span class="pill pill-good pill-xs">양호</span> <span class="mono">{{ h.after_score }}</span></td>
+        <td>{{ h.performed_by }}</td>
+        <td class="mono text-muted">{{ h.backup_path }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-note">아직 실행된 조치 이력이 없습니다.</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const historyLabels = {{ labels | tojson }};
+  const historyValues = {{ values | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

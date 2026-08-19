@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}승인 상세 · {{ ci.code }}{% endblock %}
+{% block page_title %}조치 승인 상세{% endblock %}
+{% block page_sub %}<p class="page-sub">{{ server.hostname }} · {{ ci.code }} {{ ci.name }}</p>{% endblock %}
+
+{% block content %}
+<section class="grid-2">
+  <div class="panel">
+    <div class="panel-title"><span>변경 미리보기 (Dry-run)</span>
+      <span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL[ci.risk_level] }} 위험</span>
+    </div>
+    <div class="diff-box">
+      <div class="diff-line diff-remove">{{ ar.diff_before }}</div>
+      <div class="diff-line diff-add">{{ ar.diff_after }}</div>
+    </div>
+    <div class="approval-meta-grid">
+      <div><span class="meta-label">영향 서비스</span><span>{{ ar.affected_service or '-' }}</span></div>
+      <div><span class="meta-label">예상 점수 상승분</span><span class="mono">+{{ ar.expected_score_delta }}점 (항목 배점 기준)</span></div>
+      <div><span class="meta-label">현재 서버 보안점수</span><span class="mono">{{ level_before }}점 ({{ grade_before }})</span></div>
+      <div><span class="meta-label">요청자</span><span>{{ ar.requested_by }}</span></div>
+      <div><span class="meta-label">요청일시</span><span class="mono">{{ ar.requested_at.strftime('%Y-%m-%d %H:%M') }}</span></div>
+    </div>
+
+    {% if ar.status == 'pending' %}
+      {% if current_user.can_decide_approval() %}
+      <div class="approval-actions">
+        <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="inline-form">
+          <input type="hidden" name="action" value="approve">
+          <button type="submit" class="btn btn-approve"
+                  onclick="return confirm('승인하면 백업 → 조치 실행 → 자동 재진단까지 즉시 진행됩니다. 계속할까요?');">
+            승인 (백업 → 조치 → 재진단)
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="inline-form reject-form">
+          <input type="hidden" name="action" value="reject">
+          <input type="text" name="reason" placeholder="거부 사유를 입력하세요" required>
+          <button type="submit" class="btn btn-danger">거부</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="empty-note">이 요청을 승인/거부하려면 승인자 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
+      {% endif %}
+    {% elif ar.status == 'approved' %}
+      <div class="result-box result-good">
+        <strong>승인 완료</strong> — {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        백업: <span class="mono">{{ ar.backup_path }}</span><br>
+        실행: {{ ar.executed_at.strftime('%Y-%m-%d %H:%M') if ar.executed_at else '-' }}
+      </div>
+    {% else %}
+      <div class="result-box result-bad">
+        <strong>거부됨</strong> — {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        사유: {{ ar.reject_reason }}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span>전후 비교</span></div>
+    {% if ar.status == 'approved' %}
+    <div class="before-after">
+      <div class="ba-col">
+        <div class="ba-label">조치 전</div>
+        <div class="ba-score">{{ ar.before_score }}</div>
+        <span class="pill pill-vuln pill-xs">취약</span>
+      </div>
+      <div class="ba-arrow">→</div>
+      <div class="ba-col">
+        <div class="ba-label">조치 후</div>
+        <div class="ba-score ba-score-good">{{ ar.after_score }}</div>
+        <span class="pill pill-good pill-xs">양호</span>
+      </div>
+    </div>
+    <p class="empty-note" style="margin-top:14px">서버 전체 보안점수는 {{ ar.before_score }}점에서 {{ ar.after_score }}점으로 변경되었습니다.</p>
+    {% else %}
+    <p class="empty-note">승인이 완료되면 조치 전/후 보안점수 비교가 이 영역에 표시됩니다.</p>
+    {% endif %}
+
+    <div class="panel-title" style="margin-top:22px"><span>점검 항목 가이드</span></div>
+    <p class="guide-text">{{ ci.guide }}</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로그인 · 보안 자동화 플랫폼</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-grid">
+    <div class="login-hero">
+      <div class="brand">
+        <div class="brand-mark">U</div>
+        <div class="brand-text">
+          <strong>보안 자동화 플랫폼</strong>
+          <span>KISA U-01 ~ U-67</span>
+        </div>
+      </div>
+      <h2>다중 서버 취약점 진단·조치<br>자동화 대시보드</h2>
+      <p class="login-desc">
+        Rocky Linux 2대 · Ubuntu 2대 · 웹서버+DB 1대를 대상으로<br>
+        Ansible 병렬 진단, 위험도 기반 점수 산출, 승인 기반 자동 조치를<br>
+        하나의 화면에서 관리합니다.
+      </p>
+      <div class="login-tags">
+        <span>다중 서버 진단</span>
+        <span>승인 기반 조치</span>
+        <span>Excel·PDF 리포트</span>
+      </div>
+    </div>
+
+    <div class="login-card">
+      <h3>로그인</h3>
+      <form method="post">
+        <label>아이디</label>
+        <input type="text" name="username" placeholder="admin / approver / viewer" autofocus required>
+        <label>비밀번호</label>
+        <input type="password" name="password" required>
+        <button type="submit" class="btn btn-primary btn-block">로그인</button>
+      </form>
+      <div class="demo-accounts">
+        <div class="demo-title">데모 계정</div>
+        <table>
+          <tr><td class="mono">admin</td><td>admin123!</td><td>실무자(관리자)</td></tr>
+          <tr><td class="mono">approver</td><td>approve123!</td><td>승인자</td></tr>
+          <tr><td class="mono">viewer</td><td>viewer123!</td><td>일반(조회)</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

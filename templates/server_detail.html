@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{{ server.hostname }}{% endblock %}
+{% block page_title %}{{ server.hostname }}{% endblock %}
+{% block page_sub %}<p class="page-sub">{{ server.os_label }} · {{ server.ip }} · {{ server.business_name }}</p>{% endblock %}
+
+{% block topbar_actions %}
+<a class="btn btn-ghost btn-sm" href="{{ url_for('reports.excel_report', server_id=server.id) }}">Excel</a>
+<a class="btn btn-ghost btn-sm" href="{{ url_for('reports.pdf_report', server_id=server.id) }}">PDF</a>
+<a class="btn btn-ghost btn-sm" href="{{ url_for('servers.edit_server', server_id=server.id) }}">서버 정보 수정</a>
+{% endblock %}
+
+{% block content %}
+<section class="detail-head">
+  <div class="panel score-panel">
+    <div class="kpi-label">보안 수준</div>
+    <div class="kpi-value kpi-value-lg">{{ level }}<small>/100</small></div>
+    <span class="pill pill-{{ color }}">{{ grade }}</span>
+  </div>
+  <div class="panel meta-panel">
+    <div class="meta-grid">
+      <div><span class="meta-label">역할</span><span>{{ server.role_desc or '-' }}</span></div>
+      <div><span class="meta-label">업무팀</span><span>{{ server.business_team or '-' }}</span></div>
+      <div><span class="meta-label">담당자</span><span>{{ server.owner or '-' }}</span></div>
+      <div><span class="meta-label">자산등급</span><span>{{ server.asset_grade }}</span></div>
+      <div><span class="meta-label">기밀성/무결성/가용성</span><span>{{ server.confidentiality }}/{{ server.integrity }}/{{ server.availability }}</span></div>
+      <div><span class="meta-label">점검 항목수</span><span>{{ rows|length }}건 표시 중</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <form method="get" class="filter-bar">
+    <input type="text" name="q" placeholder="항목코드/항목명 검색" value="{{ f_q }}">
+    <select name="category">
+      <option value="">전체 카테고리</option>
+      {% for c in categories %}
+      <option value="{{ c }}" {{ 'selected' if f_category == c else '' }}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <select name="risk">
+      <option value="">전체 위험도</option>
+      <option value="H" {{ 'selected' if f_risk == 'H' else '' }}>상</option>
+      <option value="M" {{ 'selected' if f_risk == 'M' else '' }}>중</option>
+      <option value="L" {{ 'selected' if f_risk == 'L' else '' }}>하</option>
+    </select>
+    <select name="result">
+      <option value="">전체 결과</option>
+      <option value="취약" {{ 'selected' if f_result == '취약' else '' }}>취약</option>
+      <option value="양호" {{ 'selected' if f_result == '양호' else '' }}>양호</option>
+      <option value="N/A" {{ 'selected' if f_result == 'N/A' else '' }}>N/A</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" type="submit">필터 적용</button>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('servers.server_detail', server_id=server.id) }}">초기화</a>
+  </form>
+
+  <table class="data data-compact">
+    <thead>
+      <tr>
+        <th>코드</th><th>카테고리</th><th>점검항목</th><th>위험도</th><th>배점</th>
+        <th>진단결과</th><th>현재설정 / 조치권고</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      {% set ci = r.check_item %}
+      <tr id="item-{{ ci.code }}" class="{{ 'row-flagged' if f_q and f_q.upper() == ci.code else '' }}">
+        <td class="mono">{{ ci.code }}</td>
+        <td>{{ ci.category }}</td>
+        <td>{{ ci.name }}</td>
+        <td><span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL.get(ci.risk_level, ci.risk_level) }}</span></td>
+        <td class="mono">{{ ci.weight }}</td>
+        <td>
+          {% if r.result == '취약' %}<span class="pill pill-vuln">취약</span>
+          {% elif r.result == 'N/A' %}<span class="pill pill-warn">N/A</span>
+          {% else %}<span class="pill pill-good">양호</span>{% endif %}
+        </td>
+        <td class="detail-text">
+          {% if r.result == '취약' %}
+            <div class="detail-current">{{ r.current_setting }}</div>
+            <div class="detail-reco">→ {{ r.recommendation }}</div>
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.result == '취약' and current_user.role == 'admin' %}
+            {% if ci.id in pending_map %}
+              <a class="btn btn-ghost btn-xs" href="{{ url_for('approvals.detail', req_id=pending_map[ci.id]) }}">승인대기중</a>
+            {% else %}
+              <form method="post" action="{{ url_for('approvals.create') }}">
+                <input type="hidden" name="server_id" value="{{ server.id }}">
+                <input type="hidden" name="check_item_id" value="{{ ci.id }}">
+                <button class="btn btn-approve btn-xs" type="submit">조치 승인 요청</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if f_q %}
+<script>
+  const target = document.querySelector('.row-flagged');
+  if (target) target.scrollIntoView({behavior:'instant', block:'center'});
+</script>
+{% endif %}
+{% endblock %}
