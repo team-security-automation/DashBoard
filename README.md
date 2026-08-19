@@ -168,3 +168,28 @@ export USE_REAL_ANSIBLE=true
   (`catalog.py`, `seed_data.py` 상단 주석에 명시).
 - 개발 서버(`app.run(debug=True)`)로 실행됩니다. 실제 배포 시 gunicorn 등 WSGI 서버 사용을
   권장합니다.
+
+
+
+-----------------------------------------------------------------------------------------
+신규 파일 (6개)
+
+inventory.py — 서버 목록 → Ansible YAML 인벤토리 생성기
+ansible/playbooks/diagnose.yml — 실제 진단 플레이북
+ansible/scripts/README.md — 팀원용 스크립트 출력 형식 계약
+ansible/scripts/rocky_linux/run_all.sh — 테스트용 예시 스크립트
+ansible/scripts/ubuntu/run_all.sh — 위와 동일(우분투용)
+.gitignore — DB/인벤토리/키 파일 등 커밋 제외 목록
+
+수정된 파일 (7개)
+
+models.py — Server에 ssh_user, ssh_port, ssh_key_path, ssh_become 필드 추가
+config.py — USE_REAL_ANSIBLE 설정값 추가
+requirements.txt — PyYAML, ansible-runner, ansible-core 추가
+blueprints/diagnosis.py — 시뮬레이션/실제 실행 분기 (전면 재작성)
+blueprints/servers.py — 서버 등록/수정 라우트에 SSH 필드 처리 추가
+templates/server_form.html — SSH 접속정보 입력 섹션 추가
+templates/diagnosis.html — 실행모드 배너 + SSH 미설정 경고 추가
+templates/servers.html — 서버 목록에 "SSH 미설정" 뱃지 추가
+seed_data.py — 데모 서버 5개에 예시 SSH 키 경로 채움
+
