@@ -162,8 +162,8 @@ def excel_report():
     # 3) 항목별상세 (위험도순 + 조건부서식) ---------------------------------
     ws2 = wb.create_sheet("항목별상세")
     headers2 = ["서버", "항목코드", "카테고리", "점검항목", "위험도", "진단결과", "배점",
-                "현재설정(취약시)", "조치권고"]
-    widths2 = [14, 10, 20, 34, 8, 10, 8, 40, 40]
+                "현재설정(취약시)", "조치권고", "조치방식"]
+    widths2 = [14, 10, 20, 34, 8, 10, 8, 40, 40, 10]
     _style_header(ws2, 1, headers2, widths2)
 
     all_rows = []
@@ -175,8 +175,9 @@ def excel_report():
 
     r_i = 2
     for srv, r, ci in all_rows:
+        remediation_label = ("수동" if r.remediation_type == "manual" else "자동") if r.result == "취약" else ""
         vals = [srv.hostname, ci.code, ci.category, ci.name, ci.risk_level, r.result, ci.weight,
-                r.current_setting or "", r.recommendation or ""]
+                r.current_setting or "", r.recommendation or "", remediation_label]
         for col, v in enumerate(vals, start=1):
             cell = ws2.cell(row=r_i, column=col, value=v)
             cell.font = BASE_FONT

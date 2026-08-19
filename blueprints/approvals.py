@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from extensions import db
 from models import Server, CheckItem, ScanResult, ApprovalRequest, ActionHistory
 from scoring import calc_security_level, GRADE_COLOR
+from impact import get_impact
 
 approvals_bp = Blueprint("approvals", __name__, url_prefix="/approvals")
 
@@ -61,6 +62,7 @@ def create():
         diff_after=f"+ 가이드 권고 설정 적용: {ci.guide}",
         affected_service=srv.role_desc,
         expected_score_delta=ci.weight,
+        remediation_type=sr.remediation_type or "auto",
     )
     db.session.add(ar)
     db.session.commit()
@@ -74,8 +76,45 @@ def detail(req_id):
     ar = ApprovalRequest.query.get_or_404(req_id)
     srv = ar.server
     level_before, grade_before, _, _ = calc_security_level(srv.latest_results())
+    impact = get_impact(ar.check_item.code)
     return render_template("approval_detail.html", ar=ar, server=srv, ci=ar.check_item,
-                            level_before=level_before, grade_before=grade_before)
+                            level_before=level_before, grade_before=grade_before, impact=impact)
+
+
+def _execute_remediation(ar, performed_by_suffix):
+    """백업 -> 조치 -> 재진단 -> 전후비교 기록. 자동 승인 직후 / 수동 완료 처리 양쪽에서 공용으로 쓴다."""
+    srv = ar.server
+    ci = ar.check_item
+    level_before, _, _, _ = calc_security_level(srv.latest_results())
+
+    ar.backup_path = f"/backup/{srv.hostname}/{datetime.utcnow():%Y%m%d_%H%M%S}_{ci.code}.tar.gz"
+
+    sr = ScanResult.query.get(ar.scan_result_id)
+    before_score = sr.score if sr else ci.weight
+
+    new_result = ScanResult(
+        server_id=srv.id, check_item_id=ci.id, scan_run_id=None,
+        result="양호", current_setting=None, recommendation=None,
+        score=0.0, remediation_type=ar.remediation_type, checked_at=datetime.utcnow(),
+    )
+    db.session.add(new_result)
+    ar.executed_at = datetime.utcnow()
+    db.session.flush()
+
+    level_after, _, _, _ = calc_security_level(srv.latest_results())
+    ar.before_score = level_before
+    ar.after_score = level_after
+
+    hist = ActionHistory(
+        approval_id=ar.id, server_id=srv.id, check_item_id=ci.id,
+        before_result="취약", after_result="양호",
+        before_score=before_score, after_score=0.0,
+        performed_by=f"{ar.approver} 승인 → {performed_by_suffix}",
+        performed_at=datetime.utcnow(), backup_path=ar.backup_path,
+    )
+    db.session.add(hist)
+    db.session.commit()
+    return level_before, level_after
 
 
 @approvals_bp.route("/<int:req_id>/decide", methods=["POST"])
@@ -105,40 +144,43 @@ def decide(req_id):
         flash("조치 요청을 거부했습니다.", "info")
         return redirect(url_for("approvals.list_approvals", status="rejected"))
 
-    # ---- 승인: 백업 -> 조치 -> 자동 재진단 -> 전후비교 기록 ------------------
-    srv = ar.server
-    ci = ar.check_item
-    level_before, _, _, _ = calc_security_level(srv.latest_results())
-
+    # ---- 승인 -----------------------------------------------------------
+    # remediation_type == "auto"  : 승인 즉시 백업 -> 조치 -> 재진단까지 자동 실행
+    # remediation_type == "manual": 승인만 기록하고 조치는 실행하지 않음.
+    #                                실무자가 직접 조치한 뒤 "수동 조치 완료 처리"를 눌러야
+    #                                ScanResult가 갱신된다 (아래 complete_manual 참고).
     ar.status = "approved"
-    ar.backup_path = f"/backup/{srv.hostname}/{datetime.utcnow():%Y%m%d_%H%M%S}_{ci.code}.tar.gz"
-
-    sr = ScanResult.query.get(ar.scan_result_id)
-    before_score = sr.score if sr else ci.weight
-
-    new_result = ScanResult(
-        server_id=srv.id, check_item_id=ci.id, scan_run_id=None,
-        result="양호", current_setting=None, recommendation=None,
-        score=0.0, checked_at=datetime.utcnow(),
-    )
-    db.session.add(new_result)
-    ar.executed_at = datetime.utcnow()
-    db.session.flush()
-
-    level_after, _, _, _ = calc_security_level(srv.latest_results())
-    ar.before_score = level_before
-    ar.after_score = level_after
-
-    hist = ActionHistory(
-        approval_id=ar.id, server_id=srv.id, check_item_id=ci.id,
-        before_result="취약", after_result="양호",
-        before_score=before_score, after_score=0.0,
-        performed_by=f"{ar.approver} 승인 → 자동 조치 실행",
-        performed_at=datetime.utcnow(), backup_path=ar.backup_path,
-    )
-    db.session.add(hist)
     db.session.commit()
 
+    if ar.remediation_type == "manual":
+        flash("승인 완료: 이 항목은 수동 조치 대상입니다. 실무자가 직접 조치한 뒤 "
+              "'수동 조치 완료 처리' 버튼을 눌러야 재진단·점수 반영이 됩니다.", "warning")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
+    level_before, level_after = _execute_remediation(ar, "자동 조치 실행")
     flash(f"승인 완료: 백업 후 조치를 실행하고 재진단했습니다. "
           f"(서버 보안점수 {level_before} → {level_after})", "success")
+    return redirect(url_for("approvals.detail", req_id=req_id))
+
+
+@approvals_bp.route("/<int:req_id>/complete-manual", methods=["POST"])
+@login_required
+def complete_manual(req_id):
+    ar = ApprovalRequest.query.get_or_404(req_id)
+    if current_user.role != "admin":
+        flash("수동 조치 완료 처리는 실무자(관리자) 권한이 필요합니다.", "warning")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
+    if ar.status != "approved" or ar.remediation_type != "manual":
+        flash("수동 조치 완료 처리 대상이 아닙니다.", "info")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
+    if ar.executed_at is not None:
+        flash("이미 완료 처리된 요청입니다.", "info")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
+    level_before, level_after = _execute_remediation(
+        ar, f"{current_user.display_name}({current_user.username}) 수동 조치 완료 처리"
+    )
+    flash(f"수동 조치 완료 처리했습니다. (서버 보안점수 {level_before} → {level_after})", "success")
     return redirect(url_for("approvals.detail", req_id=req_id))

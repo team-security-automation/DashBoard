@@ -15,7 +15,7 @@
   {% if reqs %}
   <table class="data">
     <thead>
-      <tr><th>요청일시</th><th>서버</th><th>항목</th><th>위험도</th><th>요청자</th><th>상태</th><th>승인자</th><th></th></tr>
+      <tr><th>요청일시</th><th>서버</th><th>항목</th><th>위험도</th><th>조치방식</th><th>요청자</th><th>상태</th><th>승인자</th><th></th></tr>
     </thead>
     <tbody>
       {% for r in reqs %}
@@ -24,9 +24,14 @@
         <td class="mono">{{ r.server.hostname }}</td>
         <td><span class="mono">{{ r.check_item.code }}</span> {{ r.check_item.name }}</td>
         <td><span class="pill pill-risk-{{ r.check_item.risk_level }} pill-xs">{{ RISK_LABEL[r.check_item.risk_level] }}</span></td>
+        <td>
+          {% if r.remediation_type == 'manual' %}<span class="pill pill-warn pill-xs">수동</span>
+          {% else %}<span class="pill pill-accent pill-xs">자동</span>{% endif %}
+        </td>
         <td>{{ r.requested_by }}</td>
         <td>
           {% if r.status == 'pending' %}<span class="pill pill-warn pill-xs">대기</span>
+          {% elif r.status == 'approved' and r.remediation_type == 'manual' and not r.executed_at %}<span class="pill pill-warn pill-xs">수동 조치 대기</span>
           {% elif r.status == 'approved' %}<span class="pill pill-good pill-xs">승인</span>
           {% else %}<span class="pill pill-vuln pill-xs">거부</span>{% endif %}
         </td>

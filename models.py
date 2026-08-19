@@ -171,15 +171,19 @@ class ScanResult(db.Model):
     scan_run_id = db.Column(db.Integer, db.ForeignKey("scan_run.id"), nullable=True)
 
     result = db.Column(db.String(10), nullable=False)  # 양호/취약/N/A
-    current_setting = db.Column(db.Text)   # 취약(현재설정)
-    recommendation = db.Column(db.Text)    # 양호(조치 내용) / 조치 방법
+    current_setting = db.Column(db.Text)   # 취약(현재설정) - 진단 스크립트 JSON의 current_value
+    recommendation = db.Column(db.Text)    # 양호(조치 내용) / 조치 방법 - 진단 스크립트 JSON의 expected_value
+    evidence = db.Column(db.Text)          # 양호/취약 판정 근거 - 진단 스크립트 JSON의 evidence
     score = db.Column(db.Float, default=0)  # 해당 항목 진단결과값(취약=배점, 양호=0)
+    # 수동/자동 조치 여부 - 진단 스크립트 JSON의 remediation_type을 그대로 저장.
+    # 스크립트가 값을 안 보내면 impact.default_remediation_type()으로 채워진다.
+    remediation_type = db.Column(db.String(10), default="auto")  # auto/manual
     checked_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     check_item = db.relationship("CheckItem")
 
     def to_dict(self):
-        """11개 필드 표준 JSON 스키마로 직렬화"""
+        """11개 필드 표준 JSON 스키마 + remediation_type(수동/자동 조치 여부), evidence(판정 근거)로 직렬화"""
         ci = self.check_item
         return {
             "check_id": ci.code,
@@ -193,6 +197,8 @@ class ScanResult(db.Model):
             "server_id": self.server_id,
             "os_scope": ci.os_scope,
             "checked_at": self.checked_at.isoformat() if self.checked_at else None,
+            "remediation_type": self.remediation_type,
+            "evidence": self.evidence,
         }
 
 
@@ -207,6 +213,9 @@ class ApprovalRequest(db.Model):
     requested_by = db.Column(db.String(50))
     requested_at = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default="pending")  # pending/approved/rejected
+    # 요청 시점의 진단결과에서 그대로 가져온 값. 승인자가 "승인"을 누른 뒤의 동작(자동 조치 실행 vs
+    # 수동 조치 안내)을 이 값 하나로 분기한다 - blueprints/approvals.py의 decide() 참고.
+    remediation_type = db.Column(db.String(10), default="auto")  # auto/manual
 
     diff_before = db.Column(db.Text)
     diff_after = db.Column(db.Text)

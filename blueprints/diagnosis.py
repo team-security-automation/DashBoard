@@ -11,6 +11,7 @@ from flask_login import login_required, current_user
 from extensions import db
 from models import Server, ScanRun, ScanResult, CheckItem
 from inventory import generate_inventory, servers_missing_ssh_config, ANSIBLE_DIR
+from impact import default_remediation_type
 
 diagnosis_bp = Blueprint("diagnosis", __name__, url_prefix="/diagnosis")
 
@@ -44,7 +45,8 @@ def _run_scan_simulated(app, run_id, server_ids, seconds_per_server):
                 ScanResult(
                     server_id=srv.id, check_item_id=r.check_item_id, scan_run_id=run.id,
                     result=r.result, current_setting=r.current_setting,
-                    recommendation=r.recommendation, score=r.score, checked_at=now,
+                    recommendation=r.recommendation, evidence=r.evidence, score=r.score,
+                    remediation_type=r.remediation_type, checked_at=now,
                 )
                 for r in latest
             ]
@@ -85,16 +87,25 @@ def _parse_result_json(server, run_id):
         if not ci:
             warnings.append(f"{server.hostname}: 알 수 없는 check_id '{code}' - catalog.py에 없어 건너뜀")
             continue
-        result = item.get("result", "N/A")
+        # 점검 스크립트 팀 확정 필드명: status/current_value/expected_value/evidence.
+        # (구 버전 result/current_setting/recommendation로 보내는 스크립트도 있을 수 있어 함께 지원)
+        result = item.get("status") or item.get("result", "N/A")
+        current_setting = item.get("current_value", item.get("current_setting"))
+        recommendation = item.get("expected_value", item.get("recommendation"))
+        evidence = item.get("evidence")
         score = item.get("score")
         if score is None:
             score = ci.weight if result == "취약" else 0.0
+        remediation_type = item.get("remediation_type")
+        if remediation_type not in ("auto", "manual"):
+            remediation_type = default_remediation_type(code)
         db.session.add(ScanResult(
             server_id=server.id, check_item_id=ci.id, scan_run_id=run_id,
             result=result,
-            current_setting=item.get("current_setting"),
-            recommendation=item.get("recommendation"),
-            score=score, checked_at=now,
+            current_setting=current_setting,
+            recommendation=recommendation,
+            evidence=evidence,
+            score=score, remediation_type=remediation_type, checked_at=now,
         ))
         saved += 1
     return saved, warnings

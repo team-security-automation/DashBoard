@@ -17,6 +17,7 @@ from models import (
 )
 from catalog import UNIX_ITEMS, WEB_ITEMS
 from scoring import calc_security_level
+from impact import default_remediation_type
 
 random.seed(42)
 
@@ -137,10 +138,11 @@ def _scan_results_for(server, item_list, vuln_codes, checked_at, run_id):
         score = ci.weight if is_vuln else 0.0
         current_setting = CURRENT_SETTING_TEXT.get(code) if is_vuln else None
         recommendation = ci.guide if is_vuln else None
+        remediation_type = default_remediation_type(code) if is_vuln else "auto"
         rows.append(ScanResult(
             server_id=server.id, check_item_id=ci.id, scan_run_id=run_id,
             result=result, current_setting=current_setting, recommendation=recommendation,
-            score=score, checked_at=checked_at,
+            score=score, remediation_type=remediation_type, checked_at=checked_at,
         ))
     db.session.add_all(rows)
 
@@ -263,6 +265,7 @@ def seed():
             diff_after=f"+ 가이드 권고 설정 적용: {ci.guide}",
             affected_service=srv.role_desc,
             expected_score_delta=ci.weight,
+            remediation_type=sr.remediation_type or "auto",
         )
         if decided_days_ago is not None:
             ar.decided_at = now - timedelta(days=decided_days_ago)

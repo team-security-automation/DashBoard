@@ -9,25 +9,43 @@
 ## run_all.sh가 지켜야 할 것
 
 1. 표준출력(stdout)으로 **JSON 배열 하나만** 출력한다 (배열 앞뒤로 다른 로그 섞으면 파싱 실패).
-2. 배열의 각 원소는 아래 필드를 갖는다 (`check_id`, `result`은 필수, 나머지는 선택):
+2. 배열의 각 원소(개별 점검 스크립트가 출력하는 JSON 객체 하나)는 아래 필드를 갖는다.
+   `check_id`, `status`는 **항상** 채우고, 나머지는 **취약일 때만** 채운다 (양호면 생략 또는 빈 문자열):
 
 ```json
 {
   "check_id": "U-01",
-  "result": "양호",
-  "current_setting": "취약할 때만 채움 (양호면 null 또는 생략)",
-  "recommendation": "취약할 때만 채움"
+  "category": "계정 관리",
+  "status": "취약",
+  "current_value": "PermitRootLogin이 yes로 설정됨",
+  "expected_value": "PermitRootLogin을 no로 설정",
+  "evidence": "sshd_config 46번째 줄에서 PermitRootLogin yes 확인",
+  "hostname": "rocky01",
+  "risk_level": "상",
+  "remediation_type": "auto"
 }
 ```
 
 - `check_id`는 `catalog.py`의 `CheckItem.code`와 **정확히 일치**해야 합니다
   (U-01~U-47, WEB-CI~WEB-WM). 오타나 새 코드가 있으면 대시보드가 매칭 못하고 무시합니다.
-- `result`은 `"양호"` / `"취약"` / `"N/A"` 셋 중 하나만 사용합니다.
-- `category`, `risk_level`, `os_scope`, `score`는 대시보드가 `check_id`로
-  `CheckItem` 테이블을 조회해서 자동으로 채우므로 안 보내도 됩니다.
-  (혹시 스크립트에서 자체 판단한 값을 실어 보내고 싶으면 보내도 되고, 그 경우
-  대시보드가 그 값을 그대로 신뢰하고 씁니다 — `blueprints/diagnosis.py`의
-  `_parse_result_json()` 참고)
+- `status`는 `"양호"` / `"취약"` / `"N/A"` 셋 중 하나만 사용합니다.
+- `current_value` → 대시보드의 "현재 설정"으로 저장됩니다.
+- `expected_value` → 대시보드의 "조치 권고"로 저장됩니다 (승인 화면에 "이렇게 바뀝니다"로 표시).
+- `evidence` → 판정 근거로 별도 저장됩니다 (참고용, 현재 화면에는 노출 안 함).
+- `category`, `risk_level`, `os_scope`, `hostname`은 **대시보드가 실제로 읽지 않습니다.**
+  `check_id`로 `catalog.py`를 조회해서 category/risk_level/os_scope를 자동으로 채우고,
+  대상 서버는 결과 파일명(`<hostname>.json`)으로 이미 식별하기 때문입니다. 스크립트
+  내부 로직에서 쓰는 건 상관없지만, JSON 출력에 넣어도 대시보드 동작에는 영향 없습니다.
+- `remediation_type`은 `"auto"` / `"manual"` 중 하나입니다 (선택 필드).
+  담당자가 직접 눈으로 확인해야만 조치 가능한 항목(예: 코드 수정, 조직적 정책
+  변경이 필요한 항목)은 `"manual"`로 보내주세요. **`"manual"`로 표시된 항목은
+  승인자가 승인해도 대시보드가 자동으로 조치를 실행하지 않고, 실무자가 직접
+  조치한 뒤 "수동 조치 완료 처리" 버튼을 눌러야 완료 처리됩니다.**
+  안 보내면 `impact.py`의 `CHECK_IMPACT_MAP` 기준 기본값(코드 배포·재부팅이
+  필요한 항목만 `manual`, 나머지는 `auto`)이 대신 적용됩니다.
+- (구버전 호환) `result`/`current_setting`/`recommendation` 필드명으로 보내도 여전히
+  인식됩니다 — `blueprints/diagnosis.py`의 `_parse_result_json()` 참고. 새로 짜는
+  스크립트는 위 표기(`status`/`current_value`/`expected_value`)를 쓰면 됩니다.
 
 ## 최소 예시 (개발 중 테스트용)
 
@@ -35,8 +53,8 @@
 #!/bin/bash
 # run_all.sh - 임시 예시. 실제로는 u_XX_*_check.sh들을 호출해서 합쳐야 함.
 echo '[
-  {"check_id": "U-01", "result": "양호"},
-  {"check_id": "U-02", "result": "취약", "current_setting": "PASS_MIN_LEN=5", "recommendation": "8자 이상으로 변경"}
+  {"check_id": "U-01", "status": "양호"},
+  {"check_id": "U-02", "status": "취약", "current_value": "PASS_MIN_LEN=5", "expected_value": "8자 이상으로 변경", "remediation_type": "auto"}
 ]'
 ```
 

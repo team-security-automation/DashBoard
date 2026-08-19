@@ -8,6 +8,11 @@
   <div class="panel">
     <div class="panel-title"><span>변경 미리보기 (Dry-run)</span>
       <span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL[ci.risk_level] }} 위험</span>
+      {% if ar.remediation_type == 'manual' %}
+        <span class="pill pill-warn pill-xs">수동 조치</span>
+      {% else %}
+        <span class="pill pill-accent pill-xs">자동 조치</span>
+      {% endif %}
     </div>
     <div class="diff-box">
       <div class="diff-line diff-remove">{{ ar.diff_before }}</div>
@@ -19,6 +24,8 @@
       <div><span class="meta-label">현재 서버 보안점수</span><span class="mono">{{ level_before }}점 ({{ grade_before }})</span></div>
       <div><span class="meta-label">요청자</span><span>{{ ar.requested_by }}</span></div>
       <div><span class="meta-label">요청일시</span><span class="mono">{{ ar.requested_at.strftime('%Y-%m-%d %H:%M') }}</span></div>
+      <div><span class="meta-label">적용 방식</span><span>{{ impact.apply }}</span></div>
+      <div><span class="meta-label">영향 범위</span><span>{{ impact.scope }}</span></div>
     </div>
 
     {% if ar.status == 'pending' %}
@@ -26,10 +33,17 @@
       <div class="approval-actions">
         <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="inline-form">
           <input type="hidden" name="action" value="approve">
+          {% if ar.remediation_type == 'manual' %}
+          <button type="submit" class="btn btn-approve"
+                  onclick="return confirm('이 항목은 수동 조치 대상입니다. 승인해도 자동으로 조치되지 않고, 실무자가 직접 조치 후 완료 처리해야 합니다. 계속할까요?');">
+            승인 (수동 조치 필요)
+          </button>
+          {% else %}
           <button type="submit" class="btn btn-approve"
                   onclick="return confirm('승인하면 백업 → 조치 실행 → 자동 재진단까지 즉시 진행됩니다. 계속할까요?');">
             승인 (백업 → 조치 → 재진단)
           </button>
+          {% endif %}
         </form>
         <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="inline-form reject-form">
           <input type="hidden" name="action" value="reject">
@@ -39,6 +53,21 @@
       </div>
       {% else %}
       <p class="empty-note">이 요청을 승인/거부하려면 승인자 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
+      {% endif %}
+    {% elif ar.status == 'approved' and ar.remediation_type == 'manual' and not ar.executed_at %}
+      <div class="result-box result-warn">
+        <strong>승인 완료 — 수동 조치 대기중</strong> — {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        아래 가이드에 따라 실무자가 직접 조치한 뒤 완료 처리하세요. 완료 처리 전까지는 재진단·점수 반영이 되지 않습니다.
+      </div>
+      {% if current_user.can_run_diagnosis() %}
+      <form method="post" action="{{ url_for('approvals.complete_manual', req_id=ar.id) }}" style="margin-top:12px">
+        <button type="submit" class="btn btn-approve"
+                onclick="return confirm('직접 조치를 완료했나요? 완료 처리하면 백업 기록 후 재진단·점수 반영이 진행됩니다.');">
+          수동 조치 완료 처리
+        </button>
+      </form>
+      {% else %}
+      <p class="empty-note">완료 처리는 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
       {% endif %}
     {% elif ar.status == 'approved' %}
       <div class="result-box result-good">
@@ -56,7 +85,7 @@
 
   <div class="panel">
     <div class="panel-title"><span>전후 비교</span></div>
-    {% if ar.status == 'approved' %}
+    {% if ar.executed_at %}
     <div class="before-after">
       <div class="ba-col">
         <div class="ba-label">조치 전</div>
@@ -71,6 +100,8 @@
       </div>
     </div>
     <p class="empty-note" style="margin-top:14px">서버 전체 보안점수는 {{ ar.before_score }}점에서 {{ ar.after_score }}점으로 변경되었습니다.</p>
+    {% elif ar.status == 'approved' %}
+    <p class="empty-note">수동 조치 완료 처리가 되면 조치 전/후 보안점수 비교가 이 영역에 표시됩니다.</p>
     {% else %}
     <p class="empty-note">승인이 완료되면 조치 전/후 보안점수 비교가 이 영역에 표시됩니다.</p>
     {% endif %}
