@@ -18,6 +18,13 @@ diagnosis_bp = Blueprint("diagnosis", __name__, url_prefix="/diagnosis")
 SCAN_RESULTS_DIR = Path(ANSIBLE_DIR).parent / "scan_results"
 PLAYBOOK_RELATIVE_PATH = "playbooks/diagnose.yml"
 
+# 점검 스크립트마다 "사람이 봐야 함" 상태를 다른 문구로 보낼 수 있어(수동확인 필요/
+# 수동조치필요 등) 대시보드 표준값("수동확인")으로 맞춘다.
+STATUS_ALIASES = {
+    "수동확인 필요": "수동확인",
+    "수동조치필요": "수동확인",
+}
+
 
 def _require_admin():
     if current_user.role != "admin":
@@ -90,12 +97,17 @@ def _parse_result_json(server, run_id):
         # 점검 스크립트 팀 확정 필드명: status/current_value/expected_value/evidence/is_auto_fixable.
         # (구 버전 result/current_setting/recommendation로 보내는 스크립트도 있을 수 있어 함께 지원)
         result = item.get("status") or item.get("result", "N/A")
+        # 담당자별로 "사람이 확인해야 함" 상태를 다르게 표기하는 스크립트가 있어
+        # (예: U-49~63/U-64는 "수동확인 필요", 일부 fix 스크립트는 "수동조치필요") 대시보드가
+        # 아는 표준값 "수동확인"으로 정규화한다. 안 그러면 점수·색상·승인요청 버튼이
+        # 전부 "양호"로 취급해버려 사람이 봐야 할 항목이 조용히 안전한 것처럼 보인다.
+        result = STATUS_ALIASES.get(result, result)
         current_setting = item.get("current_value", item.get("current_setting"))
         recommendation = item.get("expected_value", item.get("recommendation"))
         evidence = item.get("evidence")
         score = item.get("score")
         if score is None:
-            score = ci.weight if result == "취약" else 0.0
+            score = ci.weight if result in ("취약", "수동확인") else 0.0
         # is_auto_fixable(boolean)을 대시보드 내부 표기인 remediation_type(auto/manual)로 변환한다.
         # (구 버전 remediation_type 문자열로 보내는 스크립트도 있을 수 있어 함께 지원)
         is_auto_fixable = item.get("is_auto_fixable")

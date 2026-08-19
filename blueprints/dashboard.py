@@ -60,12 +60,14 @@ def index():
     trend_values = [r.score for r in trend_rows]
 
     # --- 위험도 상(H) 미조치 건수, 승인대기 건수 ----------------------------
+    # 수동확인(사람이 판단해야 하는 상태)도 승인 절차로 해소되기 전까지는
+    # 취약과 동일하게 "미조치"로 집계한다 (scoring.py의 감점 기준과 일치시킴).
     critical_open = 0
-    vuln_rows = []  # (check_item, server, result) - 취약 항목 전체
+    vuln_rows = []  # (check_item, server, result) - 취약/수동확인 항목 전체
     for ci in items:
         for srv in servers:
             r = per_server[srv.id].get(ci.id)
-            if r and r.result == "취약":
+            if r and r.result in ("취약", "수동확인"):
                 vuln_rows.append((ci, srv, r))
                 if ci.risk_level == "H":
                     critical_open += 1
@@ -82,7 +84,7 @@ def index():
             if not r or r.result == "N/A":
                 continue
             cat_stats[ci.category]["total"] += 1
-            if r.result == "취약":
+            if r.result in ("취약", "수동확인"):
                 cat_stats[ci.category]["vuln"] += 1
     category_chart = []
     for cat, s in cat_stats.items():
@@ -120,6 +122,9 @@ def index():
             elif r.result == "취약":
                 status = "vuln"
                 label = "취약"
+            elif r.result == "수동확인":
+                status = "manual"
+                label = "수동 조치 필요"
             elif r.result == "N/A":
                 status = "na"
                 label = "N/A"

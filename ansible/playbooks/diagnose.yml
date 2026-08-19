@@ -25,7 +25,11 @@
   vars:
     remote_work_dir: /tmp/security_check
     # os_family는 인벤토리 그룹명과 동일하게 맞춘다 (rocky_linux / ubuntu)
-    local_script_dir: "{{ playbook_dir }}/../scripts/{{ group_names[0] }}"
+    os_group: "{{ group_names[0] }}"
+    # scripts/ 전체(모든 OS 폴더 + common/)를 그대로 복사해서 로컬과 동일한 상대
+    # 경로 구조(<os_group>/account/../../common/json_output.sh)를 원격에서도 유지한다.
+    # os_group 폴더만 복사하면 account 스크립트가 source하는 common/이 빠져 실패한다.
+    local_scripts_root: "{{ playbook_dir }}/../scripts"
     local_result_dir: "{{ playbook_dir }}/../../scan_results"
 
   tasks:
@@ -35,21 +39,21 @@
         state: directory
         mode: "0700"
 
-    - name: OS별 점검 스크립트 복사
+    - name: 점검 스크립트 전체(공통 라이브러리 포함) 복사
       copy:
-        src: "{{ local_script_dir }}/"
+        src: "{{ local_scripts_root }}/"
         dest: "{{ remote_work_dir }}/"
         mode: "0700"
 
     - name: 점검 스크립트 일괄 실행 (표준 JSON 출력)
       shell: "./run_all.sh > result.json"
       args:
-        chdir: "{{ remote_work_dir }}"
+        chdir: "{{ remote_work_dir }}/{{ os_group }}"
         executable: /bin/bash
 
     - name: 결과 JSON 회수 (컨트롤 노드로)
       fetch:
-        src: "{{ remote_work_dir }}/result.json"
+        src: "{{ remote_work_dir }}/{{ os_group }}/result.json"
         dest: "{{ local_result_dir }}/{{ inventory_hostname }}.json"
         flat: yes
 

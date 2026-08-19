@@ -193,6 +193,7 @@ a { color: inherit; text-decoration: none; }
 .pill-vuln { background: var(--vuln-dim); color: var(--vuln); }
 .pill-warn { background: var(--warn-dim); color: var(--warn); }
 .pill-accent { background: var(--accent-dim); color: var(--accent); }
+.pill-manual { background: var(--warn-dim); color: var(--warn); }
 .pill-risk-H { background: var(--vuln-dim); color: var(--vuln); }
 .pill-risk-M { background: var(--warn-dim); color: var(--warn); }
 .pill-risk-L { background: var(--bg-elevated-2); color: var(--text-secondary); }
@@ -213,6 +214,7 @@ a { color: inherit; text-decoration: none; }
 .legend-vuln-H { background: var(--vuln); }
 .legend-vuln-M { background: rgba(239,68,68,.68); }
 .legend-vuln-L { background: rgba(239,68,68,.4); }
+.legend-manual { background: var(--warn); }
 .legend-na { background: var(--warn); opacity: .6; }
 
 .heatmap-scroll { overflow-x: auto; padding-bottom: 6px; }
@@ -240,6 +242,7 @@ table.heatmap { border-collapse: separate; border-spacing: 2px; }
 .hm-cell.vuln-H { background: var(--vuln); }
 .hm-cell.vuln-M { background: rgba(239,68,68,.68); }
 .hm-cell.vuln-L { background: rgba(239,68,68,.4); }
+.hm-cell.manual { background: var(--warn); }
 .hm-cell.na { background: var(--warn); opacity: .55; }
 .hm-cell:hover { outline: 1.5px solid var(--accent); outline-offset: 1px; }
 

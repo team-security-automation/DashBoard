@@ -90,7 +90,11 @@
       <div class="ba-col">
         <div class="ba-label">조치 전</div>
         <div class="ba-score">{{ ar.before_score }}</div>
+        {% if before_result == '수동확인' %}
+        <span class="pill pill-manual pill-xs">수동 조치 필요</span>
+        {% else %}
         <span class="pill pill-vuln pill-xs">취약</span>
+        {% endif %}
       </div>
       <div class="ba-arrow">→</div>
       <div class="ba-col">

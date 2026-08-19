@@ -47,6 +47,7 @@
       <option value="">전체 결과</option>
       <option value="취약" {{ 'selected' if f_result == '취약' else '' }}>취약</option>
       <option value="양호" {{ 'selected' if f_result == '양호' else '' }}>양호</option>
+      <option value="수동확인" {{ 'selected' if f_result == '수동확인' else '' }}>수동 조치 필요</option>
       <option value="N/A" {{ 'selected' if f_result == 'N/A' else '' }}>N/A</option>
     </select>
     <button class="btn btn-ghost btn-sm" type="submit">필터 적용</button>
@@ -71,11 +72,12 @@
         <td class="mono">{{ ci.weight }}</td>
         <td>
           {% if r.result == '취약' %}<span class="pill pill-vuln">취약</span>
+          {% elif r.result == '수동확인' %}<span class="pill pill-manual">수동 조치 필요</span>
           {% elif r.result == 'N/A' %}<span class="pill pill-warn">N/A</span>
           {% else %}<span class="pill pill-good">양호</span>{% endif %}
         </td>
         <td class="detail-text">
-          {% if r.result == '취약' %}
+          {% if r.result in ('취약', '수동확인') %}
             <div class="detail-current">{{ r.current_setting }}</div>
             <div class="detail-reco">→ {{ r.recommendation }}</div>
           {% else %}
@@ -83,7 +85,7 @@
           {% endif %}
         </td>
         <td>
-          {% if r.result == '취약' and current_user.role == 'admin' %}
+          {% if r.result in ('취약', '수동확인') and current_user.role == 'admin' %}
             {% if ci.id in pending_map %}
               <a class="btn btn-ghost btn-xs" href="{{ url_for('approvals.detail', req_id=pending_map[ci.id]) }}">승인대기중</a>
             {% else %}

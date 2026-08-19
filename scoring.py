@@ -31,7 +31,11 @@ PARTIAL_RATIO = 0.5  # 'P'(일부 조치) 진단결과값 = 배점의 50%
 def item_score_value(risk_level: str, result: str) -> float:
     """개별 항목의 '식별된 취약점 점수'(진단결과값)를 반환한다."""
     weight = RISK_WEIGHT.get(risk_level, 0)
-    if result == "취약":
+    # 수동확인(스크립트가 자동으로 양호/취약을 판정하지 못해 사람의 확인이 필요한 상태)은
+    # 승인 절차(조치 승인 요청 -> 수동 조치 완료 처리)를 거쳐 해소되기 전까지 취약과
+    # 동일하게 감점한다 - approvals.py의 _execute_remediation이 완료 처리 시 결과를
+    # "양호"로 갱신해 감점을 해제한다.
+    if result in ("취약", "수동확인"):
         return weight
     if result == "부분":
         return weight * PARTIAL_RATIO

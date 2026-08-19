@@ -43,8 +43,8 @@ def create():
 
     sr = (ScanResult.query.filter_by(server_id=server_id, check_item_id=check_item_id)
           .order_by(ScanResult.checked_at.desc()).first())
-    if sr is None or sr.result != "취약":
-        flash("현재 '취약'으로 진단된 항목만 조치 승인을 요청할 수 있습니다.", "warning")
+    if sr is None or sr.result not in ("취약", "수동확인"):
+        flash("현재 '취약' 또는 '수동확인'으로 진단된 항목만 조치 승인을 요청할 수 있습니다.", "warning")
         return redirect(url_for("servers.server_detail", server_id=server_id))
 
     exists = ApprovalRequest.query.filter_by(
@@ -54,6 +54,10 @@ def create():
         flash("이미 승인 대기 중인 요청이 있습니다.", "info")
         return redirect(url_for("approvals.detail", req_id=exists.id))
 
+    # 수동확인 항목은 그 자체가 "자동으로 양호/취약을 판정 못해 사람이 봐야 하는" 상태라
+    # 자동 조치 대상이 될 수 없다 - 항상 수동 조치(승인 -> 실무자 완료 처리) 경로를 탄다.
+    remediation_type = "manual" if sr.result == "수동확인" else (sr.remediation_type or "auto")
+
     ar = ApprovalRequest(
         server_id=server_id, check_item_id=check_item_id, scan_result_id=sr.id,
         requested_by=f"{current_user.display_name}({current_user.username})",
@@ -62,7 +66,7 @@ def create():
         diff_after=f"+ 가이드 권고 설정 적용: {ci.guide}",
         affected_service=srv.role_desc,
         expected_score_delta=ci.weight,
-        remediation_type=sr.remediation_type or "auto",
+        remediation_type=remediation_type,
     )
     db.session.add(ar)
     db.session.commit()
@@ -77,8 +81,11 @@ def detail(req_id):
     srv = ar.server
     level_before, grade_before, _, _ = calc_security_level(srv.latest_results())
     impact = get_impact(ar.check_item.code)
+    sr = ScanResult.query.get(ar.scan_result_id)
+    before_result = sr.result if sr else "취약"
     return render_template("approval_detail.html", ar=ar, server=srv, ci=ar.check_item,
-                            level_before=level_before, grade_before=grade_before, impact=impact)
+                            level_before=level_before, grade_before=grade_before, impact=impact,
+                            before_result=before_result)
 
 
 def _execute_remediation(ar, performed_by_suffix):
@@ -91,6 +98,7 @@ def _execute_remediation(ar, performed_by_suffix):
 
     sr = ScanResult.query.get(ar.scan_result_id)
     before_score = sr.score if sr else ci.weight
+    before_result = sr.result if sr else "취약"
 
     new_result = ScanResult(
         server_id=srv.id, check_item_id=ci.id, scan_run_id=None,
@@ -107,7 +115,7 @@ def _execute_remediation(ar, performed_by_suffix):
 
     hist = ActionHistory(
         approval_id=ar.id, server_id=srv.id, check_item_id=ci.id,
-        before_result="취약", after_result="양호",
+        before_result=before_result, after_result="양호",
         before_score=before_score, after_score=0.0,
         performed_by=f"{ar.approver} 승인 → {performed_by_suffix}",
         performed_at=datetime.utcnow(), backup_path=ar.backup_path,

@@ -70,7 +70,8 @@
     <span><i class="legend-dot legend-vuln-H"></i>취약·상</span>
     <span><i class="legend-dot legend-vuln-M"></i>취약·중</span>
     <span><i class="legend-dot legend-vuln-L"></i>취약·하</span>
-    <span><i class="legend-dot legend-na"></i>N/A(수동확인)</span>
+    <span><i class="legend-dot legend-manual"></i>수동 조치 필요</span>
+    <span><i class="legend-dot legend-na"></i>N/A</span>
   </div>
   <div class="heatmap-scroll">
     <table class="heatmap">
@@ -96,7 +97,7 @@
           <th class="server-col">{{ row.server.hostname }}</th>
           {% for cell in row.cells %}
             <td>
-              <a class="hm-cell {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else 'vuln-' ~ cell.risk) }}"
+              <a class="hm-cell {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else ('manual' if cell.status=='manual' else 'vuln-' ~ cell.risk)) }}"
                  href="{{ url_for('servers.server_detail', server_id=row.server.id, q=cell.code) }}"
                  title="{{ row.server.hostname }} · {{ cell.code }} {{ cell.name }} ({{ RISK_LABEL.get(cell.risk, cell.risk) }}) · {{ cell.label }}"></a>
             </td>
