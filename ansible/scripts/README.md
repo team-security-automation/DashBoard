@@ -22,7 +22,7 @@
   "evidence": "sshd_config 46번째 줄에서 PermitRootLogin yes 확인",
   "hostname": "rocky01",
   "risk_level": "상",
-  "remediation_type": "auto"
+  "is_auto_fixable": true
 }
 ```
 
@@ -36,16 +36,17 @@
   `check_id`로 `catalog.py`를 조회해서 category/risk_level/os_scope를 자동으로 채우고,
   대상 서버는 결과 파일명(`<hostname>.json`)으로 이미 식별하기 때문입니다. 스크립트
   내부 로직에서 쓰는 건 상관없지만, JSON 출력에 넣어도 대시보드 동작에는 영향 없습니다.
-- `remediation_type`은 `"auto"` / `"manual"` 중 하나입니다 (선택 필드).
+- `is_auto_fixable`은 `true` / `false` boolean입니다 (선택 필드).
   담당자가 직접 눈으로 확인해야만 조치 가능한 항목(예: 코드 수정, 조직적 정책
-  변경이 필요한 항목)은 `"manual"`로 보내주세요. **`"manual"`로 표시된 항목은
+  변경이 필요한 항목)은 `false`로 보내주세요. **`false`로 표시된 항목은
   승인자가 승인해도 대시보드가 자동으로 조치를 실행하지 않고, 실무자가 직접
   조치한 뒤 "수동 조치 완료 처리" 버튼을 눌러야 완료 처리됩니다.**
   안 보내면 `impact.py`의 `CHECK_IMPACT_MAP` 기준 기본값(코드 배포·재부팅이
-  필요한 항목만 `manual`, 나머지는 `auto`)이 대신 적용됩니다.
-- (구버전 호환) `result`/`current_setting`/`recommendation` 필드명으로 보내도 여전히
-  인식됩니다 — `blueprints/diagnosis.py`의 `_parse_result_json()` 참고. 새로 짜는
-  스크립트는 위 표기(`status`/`current_value`/`expected_value`)를 쓰면 됩니다.
+  필요한 항목만 수동, 나머지는 자동)이 대신 적용됩니다.
+- (구버전 호환) `result`/`current_setting`/`recommendation`/`remediation_type`
+  필드명으로 보내도 여전히 인식됩니다 — `blueprints/diagnosis.py`의
+  `_parse_result_json()` 참고. 새로 짜는 스크립트는 위 표기
+  (`status`/`current_value`/`expected_value`/`is_auto_fixable`)를 쓰면 됩니다.
 
 ## 최소 예시 (개발 중 테스트용)
 

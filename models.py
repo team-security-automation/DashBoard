@@ -175,7 +175,8 @@ class ScanResult(db.Model):
     recommendation = db.Column(db.Text)    # 양호(조치 내용) / 조치 방법 - 진단 스크립트 JSON의 expected_value
     evidence = db.Column(db.Text)          # 양호/취약 판정 근거 - 진단 스크립트 JSON의 evidence
     score = db.Column(db.Float, default=0)  # 해당 항목 진단결과값(취약=배점, 양호=0)
-    # 수동/자동 조치 여부 - 진단 스크립트 JSON의 remediation_type을 그대로 저장.
+    # 수동/자동 조치 여부 - 진단 스크립트 JSON의 is_auto_fixable(boolean)을
+    # blueprints/diagnosis.py에서 auto/manual 문자열로 변환해 저장.
     # 스크립트가 값을 안 보내면 impact.default_remediation_type()으로 채워진다.
     remediation_type = db.Column(db.String(10), default="auto")  # auto/manual
     checked_at = db.Column(db.DateTime, default=datetime.utcnow)

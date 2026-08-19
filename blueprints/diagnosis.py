@@ -87,7 +87,7 @@ def _parse_result_json(server, run_id):
         if not ci:
             warnings.append(f"{server.hostname}: 알 수 없는 check_id '{code}' - catalog.py에 없어 건너뜀")
             continue
-        # 점검 스크립트 팀 확정 필드명: status/current_value/expected_value/evidence.
+        # 점검 스크립트 팀 확정 필드명: status/current_value/expected_value/evidence/is_auto_fixable.
         # (구 버전 result/current_setting/recommendation로 보내는 스크립트도 있을 수 있어 함께 지원)
         result = item.get("status") or item.get("result", "N/A")
         current_setting = item.get("current_value", item.get("current_setting"))
@@ -96,8 +96,14 @@ def _parse_result_json(server, run_id):
         score = item.get("score")
         if score is None:
             score = ci.weight if result == "취약" else 0.0
-        remediation_type = item.get("remediation_type")
-        if remediation_type not in ("auto", "manual"):
+        # is_auto_fixable(boolean)을 대시보드 내부 표기인 remediation_type(auto/manual)로 변환한다.
+        # (구 버전 remediation_type 문자열로 보내는 스크립트도 있을 수 있어 함께 지원)
+        is_auto_fixable = item.get("is_auto_fixable")
+        if isinstance(is_auto_fixable, bool):
+            remediation_type = "auto" if is_auto_fixable else "manual"
+        elif item.get("remediation_type") in ("auto", "manual"):
+            remediation_type = item.get("remediation_type")
+        else:
             remediation_type = default_remediation_type(code)
         db.session.add(ScanResult(
             server_id=server.id, check_item_id=ci.id, scan_run_id=run_id,

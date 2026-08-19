@@ -141,10 +141,11 @@ def get_impact(check_code):
 # ---------------------------------------------------------------------------
 # 수동/자동 조치 여부 기본값
 # ---------------------------------------------------------------------------
-# 진단 스크립트가 JSON으로 "remediation_type"을 직접 보내주면 그 값을 그대로 신뢰한다
-# (ansible/scripts/README.md 참고). 스크립트가 값을 안 보내는 경우(시뮬레이션 모드 포함)에만
-# 이 영향 프로파일 기반 기본값으로 대체한다: 코드 배포(app_deploy)·재부팅(reboot_required)이
-# 필요한 항목은 자동화 시 위험이 커서 기본을 "수동"으로 잡는다.
+# 진단 스크립트가 JSON으로 "is_auto_fixable"을 직접 보내주면 그 값을 그대로 신뢰한다
+# (ansible/scripts/README.md 참고. blueprints/diagnosis.py에서 auto/manual로 변환됨).
+# 스크립트가 값을 안 보내는 경우(시뮬레이션 모드 포함)에만 이 영향 프로파일 기반
+# 기본값으로 대체한다: 코드 배포(app_deploy)·재부팅(reboot_required)이 필요한
+# 항목은 자동화 시 위험이 커서 기본을 "수동"으로 잡는다.
 MANUAL_ONLY_PROFILES = {"app_deploy", "reboot_required"}
 
 
