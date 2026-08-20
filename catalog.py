@@ -90,27 +90,37 @@ UNIX_ITEMS = [
     ("U-67", "로그 관리", "로그 파일 소유자 및 권한 관리", "M", "/var/log 내 로그 파일 root 소유 및 권한 644 이하"),
 ]
 
-# 웹 애플리케이션 21항목 (가이드 원문 코드 그대로) - 웹서버+DB 대상에만 적용
+# 웹 서비스 26항목 - ansible/scripts/web/w_01~26_web_check.sh 실물 스크립트의
+# CHECK_ID(WEB-01~26)·RISK_LEVEL 그대로 옮겼다 (이전엔 가이드 원문 예시코드
+# WEB-CI/WEB-SI 등 21항목짜리 플레이스홀더였는데, check_id가 실제 스크립트와
+# 안 맞아 결과가 전부 "알 수 없는 check_id"로 버려졌다 - 이제 스크립트가 실제로
+# 있으니 그 출력과 1:1로 맞춘다). name/guide는 각 스크립트의 점검 로직·
+# EXPECTED_VALUE를 그대로 옮겨적었다. 웹서버+DB(is_web_db) 대상에만 적용.
 WEB_ITEMS = [
-    ("WEB-CI", "웹 애플리케이션", "코드 인젝션 (Code Injection)", "H", "입력값 검증·이스케이프 처리, Prepared Statement 사용"),
-    ("WEB-SI", "웹 애플리케이션", "SQL 인젝션 (SQL Injection)", "H", "Prepared Statement/ORM 사용, 입력값 특수문자 필터링"),
-    ("WEB-DI", "웹 애플리케이션", "디렉터리 인덱싱", "H", "웹서버 Options -Indexes 설정으로 목록 노출 차단"),
-    ("WEB-EP", "웹 애플리케이션", "에러 페이지 적용 미흡", "H", "커스텀 에러 페이지 적용, 상세 스택트레이스 노출 차단"),
-    ("WEB-IL", "웹 애플리케이션", "정보 누출", "H", "주석·디버그 정보·백업파일 등 민감정보 제거"),
-    ("WEB-XS", "웹 애플리케이션", "크로스사이트 스크립트 (XSS)", "H", "입력값 필터링 및 출력값 HTML 엔티티 인코딩 적용"),
-    ("WEB-CF", "웹 애플리케이션", "크로스사이트 요청 위조 (CSRF)", "H", "CSRF 토큰 발급·검증, SameSite 쿠키 옵션 적용"),
-    ("WEB-SF", "웹 애플리케이션", "서버사이드 요청 위조 (SSRF)", "H", "내부 IP 대역 요청 차단, URL 화이트리스트 적용"),
-    ("WEB-BF", "웹 애플리케이션", "약한 비밀번호 정책", "H", "최소 길이·복잡도 정책 및 계정 잠금 정책 적용"),
-    ("WEB-IA", "웹 애플리케이션", "불충분한 인증 절차", "H", "중요 기능 접근 시 재인증 절차 추가"),
-    ("WEB-IN", "웹 애플리케이션", "불충분한 권한 검증", "H", "서버 측에서 매 요청마다 권한 검증 로직 수행"),
-    ("WEB-PR", "웹 애플리케이션", "취약한 비밀번호 복구 절차", "H", "본인확인 강화, 임시 비밀번호 유효시간 단축"),
-    ("WEB-PV", "웹 애플리케이션", "프로세스 검증 누락", "H", "다단계 절차의 각 단계별 서버 측 검증 로직 추가"),
-    ("WEB-FU", "웹 애플리케이션", "악성 파일 업로드", "H", "확장자 화이트리스트, 업로드 경로 실행권한 제거"),
-    ("WEB-FD", "웹 애플리케이션", "파일 다운로드", "H", "다운로드 경로 검증으로 상위 디렉터리 접근 차단"),
-    ("WEB-IS", "웹 애플리케이션", "불충분한 세션 관리", "H", "세션 타임아웃 설정, 로그인 시 세션ID 재발급"),
-    ("WEB-SN", "웹 애플리케이션", "데이터 평문 전송", "H", "HTTPS(TLS1.2 이상) 적용, SSLv2/v3 비활성화"),
-    ("WEB-CC", "웹 애플리케이션", "쿠키 변조", "H", "쿠키에 HttpOnly·Secure·SameSite 옵션 적용"),
-    ("WEB-AE", "웹 애플리케이션", "관리자 페이지 노출", "H", "관리자 페이지 접근 IP 제한 및 추측 어려운 경로로 변경"),
-    ("WEB-AU", "웹 애플리케이션", "자동화 공격", "H", "CAPTCHA, 요청 속도 제한(Rate Limiting) 적용"),
-    ("WEB-WM", "웹 애플리케이션", "불필요한 Method 악용", "H", "TRACE/PUT/DELETE 등 불필요 HTTP Method 비활성화"),
+    ("WEB-01", "웹 서비스", "WAS 관리콘솔 노출 (Tomcat/IIS/JEUS 전용)", "H", "Tomcat/IIS/JEUS 대상 항목 - Apache 환경에는 해당 없음"),
+    ("WEB-02", "웹 서비스", "불필요 서비스/포트 (Tomcat/IIS/JEUS 전용)", "H", "Tomcat/IIS/JEUS 대상 항목 - Apache 환경에는 해당 없음"),
+    ("WEB-03", "웹 서비스", "기본 계정/설정 (Tomcat/IIS/JEUS 전용)", "H", "Tomcat/IIS/JEUS 대상 항목 - Apache 환경에는 해당 없음"),
+    ("WEB-04", "웹 서비스", "디렉터리 인덱싱", "H", "httpd.conf Options 지시자에 Indexes 미포함"),
+    ("WEB-05", "웹 서비스", "불필요한 CGI 실행 (mod_cgi)", "H", "mod_cgi(cgi_module) 비활성화"),
+    ("WEB-06", "웹 서비스", ".htaccess 접근제어 미적용 (AllowOverride)", "H", "AllowOverride를 None이 아닌 값(AuthConfig 등)으로 설정"),
+    ("WEB-07", "웹 서비스", "백업/샘플 파일 노출", "M", "웹 루트에 manual/sample/.bak/.old 등 불필요 파일 삭제"),
+    ("WEB-08", "웹 서비스", "요청 본문 크기 제한 미흡 (DoS)", "L", "LimitRequestBody 설정"),
+    ("WEB-09", "웹 서비스", "웹서버 프로세스 root 권한 구동", "H", "Apache User 지시자를 비root 계정으로 설정"),
+    ("WEB-10", "웹 서비스", "오픈 프록시 설정", "H", "mod_proxy 미사용 또는 ProxyRequests Off"),
+    ("WEB-11", "웹 서비스", "DocumentRoot 기본 경로 사용", "H", "DocumentRoot를 기본 경로(/var/www/html)가 아닌 경로로 분리(환경별 수동 판단)"),
+    ("WEB-12", "웹 서비스", "심볼릭링크 추적 허용 (FollowSymLinks)", "M", "Options 지시자에 FollowSymLinks 미포함"),
+    ("WEB-13", "웹 서비스", "불필요 기본 페이지 (Tomcat/IIS/JEUS 전용)", "H", "Tomcat/IIS/JEUS 대상 항목 - Apache 환경에는 해당 없음"),
+    ("WEB-14", "웹 서비스", "웹서버 설정파일 권한 과다", "H", "httpd.conf 파일 권한 750 이하"),
+    ("WEB-15", "웹 서비스", "설정파일 인증정보 평문저장 (Tomcat/IIS/JEUS 전용)", "H", "Tomcat/IIS/JEUS 대상 항목 - Apache 환경에는 해당 없음"),
+    ("WEB-16", "웹 서비스", "서버 배너/버전정보 노출", "M", "ServerTokens Prod, ServerSignature Off"),
+    ("WEB-17", "웹 서비스", "기본 제공 경로 노출 (/icons, /manual)", "M", "/icons, /manual 등 기본 제공 Alias 제거"),
+    ("WEB-18", "웹 서비스", "WebDAV 활성화", "H", "mod_dav 미사용 및 Dav 지시자 Off"),
+    ("WEB-19", "웹 서비스", "SSI(Server Side Includes) 실행 허용", "M", "Options 지시자에 Includes 미포함"),
+    ("WEB-20", "웹 서비스", "HTTPS(SSL/TLS) 미적용", "H", "mod_ssl 로드 + SSLEngine on"),
+    ("WEB-21", "웹 서비스", "HTTP→HTTPS 강제 리다이렉트 미설정", "M", "80번 포트 요청을 HTTPS로 리다이렉트"),
+    ("WEB-22", "웹 서비스", "에러페이지 커스터마이징 미흡", "L", "400/401/403/404/500 ErrorDocument 설정"),
+    ("WEB-23", "웹 서비스", "불필요 예제/테스트 페이지 (Tomcat/IIS/JEUS 전용)", "H", "Tomcat/IIS/JEUS 대상 항목 - Apache 환경에는 해당 없음"),
+    ("WEB-24", "웹 서비스", "파일 업로드 검증 미흡", "M", "업로드 기능 추가 시 확장자·경로 검증 로직 점검 필요(현재 기능 미구현)"),
+    ("WEB-25", "웹 서비스", "웹서버 패키지 보안패치 미적용", "H", "httpd 관련 패키지 최신 패치 적용"),
+    ("WEB-26", "웹 서비스", "웹 로그 파일 권한 과다", "M", "로그 디렉터리 750 이하, 로그 파일 640 이하"),
 ]

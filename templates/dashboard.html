@@ -2,12 +2,16 @@
 {% block title %}대시보드{% endblock %}
 {% block page_title %}대시보드{% endblock %}
 
-{% block topbar_actions %}
-<button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('downloadModal').classList.add('open')">보고서 다운로드</button>
-<a class="btn btn-primary btn-sm" href="{{ url_for('diagnosis.index') }}">진단 실행</a>
-{% endblock %}
-
 {% block content %}
+
+{% if current_user.role == 'approver' and pending_approvals %}
+<section class="approver-alert reveal">
+  <div class="approver-alert-text">
+    <strong>{{ pending_approvals }}건</strong>의 조치 승인 요청이 대기 중입니다.
+  </div>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('approvals.list_approvals') }}">지금 처리하기 ›</a>
+</section>
+{% endif %}
 
 <section class="kpi-row">
   <div class="kpi-card kpi-card-primary reveal">
@@ -152,6 +156,7 @@
   <div class="panel panel-compact reveal">
     <div class="panel-title">
       <span>카테고리별 위험 분포</span>
+      <span class="panel-title-sub">전체 {{ server_count }}대 서버 합산 · 취약/수동확인 건수</span>
     </div>
     <div style="height:150px"><canvas id="categoryChart"></canvas></div>
   </div>
@@ -162,36 +167,6 @@
     <canvas id="trendChart" height="120"></canvas>
   </div>
 </section>
-
-<div class="modal-overlay" id="downloadModal">
-  <div class="modal">
-    <h3>보고서 다운로드</h3>
-    <p class="modal-desc">Excel 또는 PDF로 받을 대상을 선택하세요.</p>
-    <form method="get" id="downloadForm">
-      <div class="dl-scope">
-        <label class="dl-scope-opt">
-          <input type="radio" name="dl_scope" value="all" checked> 전체 서버 ({{ heatmap_servers|length }}대)
-        </label>
-        <label class="dl-scope-opt">
-          <input type="radio" name="dl_scope" value="pick"> 서버 선택
-        </label>
-      </div>
-      <div class="dl-server-list" id="dlServerList">
-        {% for srv in heatmap_servers %}
-        <label class="dl-server-item">
-          <input type="checkbox" name="server_id" value="{{ srv.id }}" disabled>
-          <span class="mono">{{ srv.hostname }}</span>
-        </label>
-        {% endfor %}
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" onclick="document.getElementById('downloadModal').classList.remove('open')">취소</button>
-        <button type="submit" class="btn btn-ghost" formaction="{{ url_for('reports.excel_report') }}" formtarget="_blank">Excel</button>
-        <button type="submit" class="btn btn-primary" formaction="{{ url_for('reports.pdf_report') }}" formtarget="_blank">PDF</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 {% endblock %}
 
@@ -221,26 +196,6 @@
         const card = document.querySelector('.hm-server-card[data-server-id="' + id + '"]');
         if (card) card.style.display = show ? '' : 'none';
       });
-    });
-  })();
-</script>
-<script>
-  (function () {
-    const modal = document.getElementById('downloadModal');
-    if (!modal) return;
-    const scopeRadios = modal.querySelectorAll('input[name="dl_scope"]');
-    const checks = modal.querySelectorAll('#dlServerList input[type=checkbox]');
-    function sync() {
-      const pick = modal.querySelector('input[name="dl_scope"]:checked').value === 'pick';
-      checks.forEach((c) => { c.disabled = !pick; if (!pick) c.checked = false; });
-    }
-    scopeRadios.forEach((r) => r.addEventListener('change', sync));
-    document.getElementById('downloadForm').addEventListener('submit', (e) => {
-      const pick = modal.querySelector('input[name="dl_scope"]:checked').value === 'pick';
-      if (pick && ![...checks].some((c) => c.checked)) {
-        e.preventDefault();
-        alert('다운로드할 서버를 하나 이상 선택하세요.');
-      }
     });
   })();
 </script>

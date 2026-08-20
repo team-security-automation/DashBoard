@@ -19,6 +19,13 @@
 <p class="empty-note">항목 판정은 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
 {% endif %}
 
+{% if selected_server %}
+<a class="review-back-link" href="{{ url_for('review.index') }}">‹ 전체 서버로</a>
+<div class="review-server-heading">
+  <h2 class="mono">{{ selected_server.hostname }}</h2>
+  <span class="text-muted">{{ selected_server.os_label }} · {{ selected_server.role_desc }}</span>
+</div>
+
 <section class="review-grid" id="reviewGrid">
   {% for c in cards %}
   <article class="review-card reveal" data-id="{{ c.scan_result_id }}">
@@ -31,8 +38,8 @@
       <h3>{{ c.ci.name }}</h3>
     </div>
     <div class="review-field">
-      <span class="review-field-label">현재 상태</span>
-      <p class="review-field-value">{{ c.current_setting or '기록된 값이 없습니다' }}</p>
+      <span class="review-field-label">현재 세팅값</span>
+      <p class="review-field-value mono">{{ c.current_setting or '기록된 값이 없습니다' }}</p>
     </div>
     <div class="review-field">
       <span class="review-field-label">확인이 필요한 이유</span>
@@ -49,9 +56,30 @@
 </section>
 
 <section class="review-empty{{ ' is-visible' if not cards else '' }}" id="reviewEmpty">
+  <h2>이 서버는 확인 완료</h2>
+  <p>{{ selected_server.hostname }}에 남은 수동확인 항목이 없습니다.</p>
+  <a class="btn btn-ghost" href="{{ url_for('review.index') }}">전체 서버로 돌아가기</a>
+</section>
+
+{% else %}
+<section class="review-server-grid" id="reviewServerGrid">
+  {% for s in server_summaries %}
+  <a class="review-server-card reveal" href="{{ url_for('review.index', server_id=s.server.id) }}">
+    <div class="review-server-card-top">
+      <span class="mono">{{ s.server.hostname }}</span>
+      <span class="pill pill-risk-{{ s.top_risk }} pill-xs">{{ RISK_LABEL.get(s.top_risk, s.top_risk) }} 포함</span>
+    </div>
+    <div class="review-server-count">{{ s.count }}<small>건 미확인</small></div>
+    <div class="review-server-card-sub">{{ s.server.os_label }} · {{ s.server.role_desc }}</div>
+  </a>
+  {% endfor %}
+</section>
+
+<section class="review-empty{{ ' is-visible' if not server_summaries else '' }}" id="reviewEmpty">
   <h2>모든 항목 확인 완료</h2>
   <p>수동확인이 필요한 진단 항목이 남아있지 않습니다.</p>
 </section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

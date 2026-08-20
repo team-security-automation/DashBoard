@@ -89,6 +89,22 @@ class Server(db.Model):
     scan_results = db.relationship(
         "ScanResult", backref="server", lazy="dynamic", cascade="all,delete-orphan"
     )
+    # 서버 삭제 시 승인요청/조치이력/점수스냅샷도 함께 지워야 한다.
+    # (예전엔 scan_result만 cascade가 걸려 있어서, 서버를 지워도 이 세 테이블에는
+    # server_id가 그대로 남았다 - SQLite가 지워진 id를 재사용하면서 다른 서버의
+    # 이력인 것처럼 뒤섞이는 문제가 있었다.)
+    approval_requests_cascade = db.relationship(
+        "ApprovalRequest", backref="server", lazy="dynamic",
+        cascade="all,delete-orphan", foreign_keys="ApprovalRequest.server_id",
+    )
+    action_histories_cascade = db.relationship(
+        "ActionHistory", backref="server", lazy="dynamic",
+        cascade="all,delete-orphan", foreign_keys="ActionHistory.server_id",
+    )
+    score_snapshots_cascade = db.relationship(
+        "ScoreSnapshot", backref="server", lazy="dynamic",
+        cascade="all,delete-orphan", foreign_keys="ScoreSnapshot.server_id",
+    )
 
     @property
     def os_label(self):
@@ -228,6 +244,10 @@ class ApprovalRequest(db.Model):
     approver = db.Column(db.String(50))
     decided_at = db.Column(db.DateTime)
     reject_reason = db.Column(db.Text)
+    approve_note = db.Column(db.Text)
+    # 수동 조치를 완료 처리할 때 실무자가 "무엇을/어떻게 조치했는지" 남기는 필수 기록.
+    # 자동 조치는 시스템이 그대로 실행하므로 이 값이 필요 없다 (None으로 남음).
+    work_note = db.Column(db.Text)
 
     executed_at = db.Column(db.DateTime)
     backup_path = db.Column(db.String(200))
@@ -235,7 +255,6 @@ class ApprovalRequest(db.Model):
     before_score = db.Column(db.Float)
     after_score = db.Column(db.Float)
 
-    server = db.relationship("Server")
     check_item = db.relationship("CheckItem")
 
 
@@ -254,9 +273,11 @@ class ActionHistory(db.Model):
     performed_by = db.Column(db.String(50))
     performed_at = db.Column(db.DateTime, default=datetime.utcnow)
     backup_path = db.Column(db.String(200))
+    # 수동 조치 완료 처리 시 실무자가 남긴 조치 내용 (자동 조치는 None) - 조치 보고서의 근거 자료.
+    work_note = db.Column(db.Text)
 
-    server = db.relationship("Server")
     check_item = db.relationship("CheckItem")
+    approval = db.relationship("ApprovalRequest")
 
 
 class ScoreSnapshot(db.Model):
@@ -269,5 +290,3 @@ class ScoreSnapshot(db.Model):
     snapshot_date = db.Column(db.Date, nullable=False)
     score = db.Column(db.Float, nullable=False)
     grade = db.Column(db.String(10))
-
-    server = db.relationship("Server")

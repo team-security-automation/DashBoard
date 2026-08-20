@@ -3,53 +3,74 @@
   const bar = document.getElementById('progressBar');
   const label = document.getElementById('progressLabel');
   const count = document.getElementById('progressCount');
-  const sub = document.getElementById('progressSub');
-  const servers = document.getElementById('progressServers');
+  const lanes = document.getElementById('progressLanes');
+  const doneBox = document.getElementById('progressDone');
   if (!box) return;
+
+  const STATUS_BADGE = {
+    '대기': '<span class="badge badge-neutral">대기</span>',
+    '진행중': '<span class="badge badge-warn">진행중</span>',
+    '완료': '<span class="badge badge-good">완료</span>',
+    '실패': '<span class="badge badge-vuln">실패</span>',
+  };
+
+  function renderLanes(hostsDetail) {
+    if (!lanes) return;
+    lanes.innerHTML = hostsDetail.map((h) => {
+      const stepText = h.step_total ? `${h.step_index}/${h.step_total}단계` : '';
+      const itemText = h.item_total ? ` · ${h.item_done}/${h.item_total}항목` : '';
+      const taskText = h.task ? h.task : (h.status === '실패' ? (h.reason || '') : '');
+      return `
+        <div class="progress-lane">
+          <div class="progress-lane-head">
+            <strong>${h.hostname}</strong>
+            ${STATUS_BADGE[h.status] || h.status}
+          </div>
+          <div class="bar-track progress-track progress-track-sm">
+            <div class="bar-fill ${h.status === '실패' ? 'bar-vuln' : 'bar-accent'}" style="width:${h.percent}%"></div>
+          </div>
+          <div class="progress-lane-sub mono">${stepText}${itemText}${taskText ? ' · ' + taskText : ''}</div>
+        </div>`;
+    }).join('');
+  }
 
   function poll(runId) {
     box.style.display = 'block';
+    if (doneBox) doneBox.style.display = 'none';
     const timer = setInterval(async () => {
       try {
         const res = await fetch(`/diagnosis/status/${runId}`);
         const data = await res.json();
-        const pct = data.percent != null ? Math.round(data.percent)
-          : (data.total ? Math.round((data.completed / data.total) * 100) : 0);
+        const pct = data.percent != null ? Math.round(data.percent) : 0;
         bar.style.width = pct + '%';
-        // 서버 몇 대 끝났는지보다 "지금 서버에서 몇 번째 점검 항목까지 돌았는지"가
-        // 훨씬 체감되는 진행 신호라 헤드라인 카운트를 항목 단위로 우선 보여준다.
-        if (data.status !== 'completed' && data.item_total) {
-          count.textContent = `${data.item_done} / ${data.item_total}개 항목`;
-        } else {
-          count.textContent = `${data.completed} / ${data.total}대 서버`;
-        }
-        servers.innerHTML = data.servers.slice(0, data.completed)
-          .map((s) => `<span>${s} 완료</span>`).join('');
-
-        if (sub) {
-          if (data.status !== 'completed' && data.current_server && data.category) {
-            sub.style.display = 'block';
-            sub.textContent = `${data.current_server} · ${data.category} 확인 중`
-              + ` (카테고리 ${data.cat_index}/${data.cat_total} · 서버 ${data.completed}/${data.total}대 완료)`;
-          } else {
-            sub.style.display = 'none';
-          }
-        }
+        count.textContent = `${data.completed} / ${data.total}대 서버`;
+        renderLanes(data.hosts_detail || []);
 
         if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+          clearInterval(timer);
+          const ok = (data.hosts_detail || []).filter((h) => h.status === '완료').length;
+          const fail = (data.hosts_detail || []).filter((h) => h.status === '실패').length;
           label.textContent = data.status === 'completed' ? '진단 완료'
             : data.status === 'cancelled' ? '진단 중지됨'
             : '진단 실패';
-          clearInterval(timer);
-          const goBack = () => { window.location.href = window.location.pathname; };
+
+          // 예전엔 완료되면 0.9초 뒤 조용히 초기 화면으로 새로고침해서
+          // "다 됐는지도 모르게 사라진다"는 문제가 있었다. 이제는 결과 요약을
+          // 화면에 그대로 남겨두고, 사용자가 확인 버튼을 눌러야 새로고침한다.
+          if (doneBox) {
+            doneBox.style.display = 'block';
+            doneBox.innerHTML = `
+              <p><strong>${ok}대 성공${fail ? `, ${fail}대 실패` : ''}</strong> — 진단 결과가 저장되었습니다.</p>
+              <div class="form-actions" style="border-top:none; padding-top:0">
+                <a href="/" class="btn btn-ghost btn-sm">대시보드에서 보기</a>
+                <button type="button" class="btn btn-primary btn-sm" id="progressDoneOk">확인</button>
+              </div>`;
+            document.getElementById('progressDoneOk').addEventListener('click', () => {
+              window.location.href = window.location.pathname;
+            });
+          }
           if (data.status === 'failed' && window.showFailReason) {
-            // 실패 원인을 읽을 시간을 주기 위해, 팝업을 닫을 때 새로고침하도록 콜백을 넘긴다.
-            // (바로 새로고침하면 팝업이 뜨자마자 사라져서 원인을 못 읽음)
-            window.showFailReason(data.fail_reason, goBack);
-          } else {
-            // URL에 run_id가 남아있으면 새로고침 후에도 끝난 run을 다시 폴링해서
-            // reload가 반복되므로, 쿼리스트링 없는 순수 페이지로 이동한다.
-            setTimeout(goBack, 900);
+            window.showFailReason(data.fail_reason, null);
           }
         } else {
           label.textContent = '진단 진행 중...';
@@ -68,6 +89,7 @@
   if (form) {
     form.addEventListener('submit', () => {
       box.style.display = 'block';
+      if (doneBox) doneBox.style.display = 'none';
       label.textContent = '진단 요청 전송 중...';
     });
   }

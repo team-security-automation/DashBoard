@@ -64,11 +64,17 @@ def generate_inventory(server_ids=None, path=None):
             "ansible_ssh_private_key_file": s.ssh_key_path,
             "ansible_become": bool(s.ssh_become),
             "server_id": s.id,  # 결과 JSON을 어느 Server row에 매핑할지 대조용
+            # 웹서버+DB 서버만 scripts/web/(WEB-01~26)도 같이 배포·실행하도록
+            # diagnose.yml에서 이 값으로 분기한다.
+            "is_web_db": bool(s.is_web_db),
             # dashboard/ansible에는 ansible.cfg를 두지 않으므로(그건 security-platform
             # 전용) SSH 타임아웃/킵얼라이브를 인벤토리 변수로 직접 넘긴다. 이게 없으면
             # 전송 도중 연결이 끊겨도 감지할 방법이 없어 진단이 무한정 멈춘다.
+            # 릴레이(Tailscale DERP 등) 경유라 왕복 지연이 크거나 컨트롤 노드가
+            # 잠깐 버벅여도(스왑 등) 연결을 바로 끊지 않도록 견딤 시간을 늘렸다
+            # (15s x 6 = 90초까지 무응답을 버팀, 기존 45초에서 상향).
             "ansible_ssh_common_args": (
-                "-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+                "-o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=6"
             ),
         }
 

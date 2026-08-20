@@ -14,6 +14,13 @@
         <span class="pill pill-accent pill-xs">자동 조치</span>
       {% endif %}
     </div>
+    <p class="empty-note" style="padding:0 0 18px; text-align:left">
+      {% if ar.remediation_type == 'manual' %}
+      수동 조치 · 승인되면 실무자가 서버에 직접 접속해 조치합니다. 조치 내용을 기록하고 "완료 처리"를 눌러야 백업 기록 · 재진단 · 점수 반영까지 이뤄집니다.
+      {% else %}
+      자동 조치 · 승인되면 관리자가 "자동 조치 실행"을 눌러야 시스템이 백업 → 설정 변경 → 재진단 → 점수 반영까지 자동으로 처리합니다.
+      {% endif %}
+    </p>
     <div class="diff-box">
       <div class="diff-line diff-remove">{{ ar.diff_before }}</div>
       <div class="diff-line diff-add">{{ ar.diff_after }}</div>
@@ -31,24 +38,33 @@
     {% if ar.status == 'pending' %}
       {% if current_user.can_decide_approval() %}
       <div class="approval-actions">
-        <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="inline-form">
+        <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="decide-form">
           <input type="hidden" name="action" value="approve">
           {% if ar.remediation_type == 'manual' %}
-          <button type="submit" class="btn btn-approve"
-                  onclick="return confirm('이 항목은 수동 조치 대상입니다. 승인해도 자동으로 조치되지 않고, 실무자가 직접 조치 후 완료 처리해야 합니다. 계속할까요?');">
-            승인 (수동 조치 필요)
-          </button>
+          <button type="button" class="btn btn-approve decide-open">승인 (수동 조치 필요)</button>
           {% else %}
-          <button type="submit" class="btn btn-approve"
-                  onclick="return confirm('승인하면 백업 후 조치가 실행되고 자동으로 재진단까지 진행됩니다. 계속할까요?');">
-            승인 (자동 조치 진행)
-          </button>
+          <button type="button" class="btn btn-approve decide-open">승인 (조치 실행 대기)</button>
           {% endif %}
+          <span class="decide-inline">
+            <input type="text" name="note" class="decide-input" placeholder="참고 메모 (선택)">
+            {% if ar.remediation_type == 'manual' %}
+            <button type="submit" class="btn btn-approve"
+                    onclick="return confirm('이 항목은 수동 조치 대상입니다. 승인해도 자동으로 조치되지 않고, 실무자가 직접 조치 후 완료 처리해야 합니다. 계속할까요?');">확인</button>
+            {% else %}
+            <button type="submit" class="btn btn-approve"
+                    onclick="return confirm('승인하면 조치 실행 대기 상태가 됩니다. 이후 관리자가 &quot;자동 조치 실행&quot;을 눌러야 실제로 진행됩니다. 계속할까요?');">확인</button>
+            {% endif %}
+            <button type="button" class="btn btn-ghost decide-cancel">취소</button>
+          </span>
         </form>
-        <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="inline-form reject-form">
+        <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="decide-form">
           <input type="hidden" name="action" value="reject">
-          <input type="text" name="reason" placeholder="거부 사유를 입력하세요" required>
-          <button type="submit" class="btn btn-danger">거부</button>
+          <button type="button" class="btn btn-danger decide-open">거부</button>
+          <span class="decide-inline">
+            <input type="text" name="reason" class="decide-input" placeholder="거부 사유를 입력하세요" required>
+            <button type="submit" class="btn btn-danger">확인</button>
+            <button type="button" class="btn btn-ghost decide-cancel">취소</button>
+          </span>
         </form>
       </div>
       {% else %}
@@ -57,27 +73,60 @@
     {% elif ar.status == 'approved' and ar.remediation_type == 'manual' and not ar.executed_at %}
       <div class="result-box result-warn">
         <strong>승인 완료 · 수동 조치 대기중</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>
+        {% if ar.approve_note %}승인자 메모: {{ ar.approve_note }}<br>{% endif %}
         아래 가이드에 따라 실무자가 직접 조치한 뒤 완료 처리하세요. 완료 처리 전까지는 재진단·점수 반영이 되지 않습니다.
+      </div>
+      <div class="approval-guide-box">
+        <span class="meta-label">조치 방법 가이드</span>
+        <p class="guide-text">{{ ci.guide }}</p>
       </div>
       <div class="step-list">
         <div class="step-item step-done reveal"><span class="step-check">✓</span> 승인 완료</div>
-        <div class="step-item step-current reveal"><span class="step-check">›</span> 실무자 직접 조치 (아래 가이드 참고)</div>
+        <div class="step-item step-current reveal"><span class="step-check">›</span> 실무자 직접 조치 (위 가이드 참고)</div>
         <div class="step-item reveal"><span class="step-check">·</span> 완료 처리 → 백업 기록</div>
         <div class="step-item reveal"><span class="step-check">·</span> 재진단 · 점수 반영</div>
       </div>
       {% if current_user.can_run_diagnosis() %}
-      <form method="post" action="{{ url_for('approvals.complete_manual', req_id=ar.id) }}" style="margin-top:12px">
+      <form method="post" action="{{ url_for('approvals.complete_manual', req_id=ar.id) }}" class="decide-form" style="margin-top:12px">
+        <button type="button" class="btn btn-approve decide-open">수동 조치 완료 처리</button>
+        <span class="decide-inline">
+          <input type="text" name="work_note" class="decide-input" placeholder="무엇을/어떻게 조치했는지 입력" required>
+          <button type="submit" class="btn btn-approve"
+                  onclick="return confirm('완료 처리하면 백업 기록 후 재진단·점수 반영이 진행됩니다. 계속할까요?');">확인</button>
+          <button type="button" class="btn btn-ghost decide-cancel">취소</button>
+        </span>
+      </form>
+      <p class="empty-note" style="padding:8px 0 0; text-align:left">실제로 무엇을 어떻게 조치했는지 남겨야 완료 처리됩니다 (조치 보고서에 그대로 반영됩니다).</p>
+      {% else %}
+      <p class="empty-note">완료 처리는 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
+      {% endif %}
+    {% elif ar.status == 'approved' and ar.remediation_type == 'auto' and not ar.executed_at %}
+      <div class="result-box result-warn">
+        <strong>승인 완료 · 자동 조치 실행 대기중</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>
+        {% if ar.approve_note %}승인자 메모: {{ ar.approve_note }}<br>{% endif %}
+        승인자와 별개로, 관리자가 아래 "자동 조치 실행"을 눌러야 백업 · 설정 변경 · 재진단이 진행됩니다.
+      </div>
+      <div class="step-list">
+        <div class="step-item step-done reveal"><span class="step-check">✓</span> 승인 완료</div>
+        <div class="step-item step-current reveal"><span class="step-check">›</span> 관리자 자동 조치 실행 대기</div>
+        <div class="step-item reveal"><span class="step-check">·</span> 백업 생성 → 설정 변경 적용</div>
+        <div class="step-item reveal"><span class="step-check">·</span> 재진단 · 점수 반영</div>
+      </div>
+      {% if current_user.role == 'admin' %}
+      <form method="post" action="{{ url_for('approvals.execute', req_id=ar.id) }}" style="margin-top:12px">
         <button type="submit" class="btn btn-approve"
-                onclick="return confirm('직접 조치를 완료했나요? 완료 처리하면 백업 기록 후 재진단·점수 반영이 진행됩니다.');">
-          수동 조치 완료 처리
+                onclick="return confirm('자동 조치를 실행할까요? 백업 후 설정을 변경하고 재진단까지 자동으로 진행됩니다.');">
+          자동 조치 실행
         </button>
       </form>
       {% else %}
-      <p class="empty-note">완료 처리는 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
+      <p class="empty-note">자동 조치 실행은 관리자 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
       {% endif %}
     {% elif ar.status == 'approved' %}
       <div class="result-box result-good">
         <strong>승인 완료</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>
+        {% if ar.approve_note %}승인자 메모: {{ ar.approve_note }}<br>{% endif %}
+        {% if ar.work_note %}조치 내용: {{ ar.work_note }}<br>{% endif %}
         백업: <span class="mono">{{ ar.backup_path }}</span><br>
         실행: {{ (ar.executed_at | kst).strftime('%Y-%m-%d %H:%M') if ar.executed_at else '-' }}
       </div>
@@ -87,6 +136,23 @@
         <div class="step-item step-done reveal"><span class="step-check">✓</span> 재진단 실행</div>
         <div class="step-item step-done reveal"><span class="step-check">✓</span> 점수 반영 <span class="mono step-detail">{{ ar.before_score }} → {{ ar.after_score }}점</span></div>
       </div>
+      {% if current_user.role == 'admin' %}
+      {#
+        TODO(backend, 친구 담당): POST /approvals/<id>/rollback 라우트가 아직 없어 지금은 눌러도 404입니다.
+        - admin 권한 확인
+        - ar.executed_at is not None 확인 (아직 실행 안 된 건 롤백 대상 아님)
+        - ar.backup_path의 백업으로 실제 설정을 복구하고, 재진단을 다시 실행해 점수 반영
+        - 롤백 이력을 어떻게 남길지(예: ApprovalRequest.rolled_back_at 컬럼 추가, 또는 ActionHistory에
+          반대방향 행 추가)는 백엔드에서 설계해서 이 버튼이 "이미 롤백됨" 상태도 구분해서 보여주면 좋음
+      #}
+      <form method="post" action="/approvals/{{ ar.id }}/rollback" style="margin-top:16px">
+        <button type="submit" class="btn btn-danger btn-sm"
+                onclick="return confirm('롤백하면 조치 전 백업({{ ar.backup_path }})으로 설정을 되돌리고 재진단을 다시 실행합니다. 계속할까요?');">
+          이 조치 롤백
+        </button>
+      </form>
+      <p class="empty-note" style="padding:6px 0 0; text-align:left">롤백하면 조치 전 백업 설정으로 복구하고, 서버를 다시 진단해 점수에 반영합니다.</p>
+      {% endif %}
     {% else %}
       <div class="result-box result-bad">
         <strong>거부됨</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>

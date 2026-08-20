@@ -49,7 +49,9 @@
       card.classList.add('removing');
       setTimeout(() => {
         card.remove();
-        if (data.pending_count === 0) empty.classList.add('is-visible');
+        // data.pending_count는 전체 서버 합산 값이라, 지금 보고 있는 서버(혹은
+        // 화면)에 카드가 남아있는지는 grid에 남은 .review-card 수로 따로 판단한다.
+        if (!grid.querySelector('.review-card')) empty.classList.add('is-visible');
       }, 300);
     } catch (err) {
       card.querySelectorAll('button').forEach((b) => (b.disabled = false));

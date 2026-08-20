@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}보고서{% endblock %}
+{% block page_title %}보고서{% endblock %}
+{% block page_sub %}<p class="page-sub">완료된 진단·조치 결과를 Excel/PDF로 내려받습니다.</p>{% endblock %}
+
+{% block content %}
+<section class="grid-2">
+  <div class="panel reveal">
+    <div class="panel-title"><span>진단 보고서</span></div>
+    <p class="empty-note" style="padding:0 0 18px; text-align:left">
+      최신 진단 결과 전체(서버 요약 · 항목별 상세 · 조치이력 · 승인이력)를 담습니다.
+    </p>
+    {% if pending_manual %}
+    <div class="flash flash-warning" style="margin:0 0 16px">
+      수동확인 대기 {{ pending_manual }}건이 남아있어 생성할 수 없습니다.
+      <a href="{{ url_for('review.index') }}">지금 수동확인 하러 가기 ›</a>
+    </div>
+    {% endif %}
+    <form method="get" id="diagnosisReportForm">
+      <div class="dl-scope">
+        <label class="dl-scope-opt">
+          <input type="radio" name="dl_scope" value="all" checked> 전체 서버 ({{ servers|length }}대)
+        </label>
+        <label class="dl-scope-opt">
+          <input type="radio" name="dl_scope" value="pick"> 서버 선택
+        </label>
+      </div>
+      <div class="dl-server-list" id="diagnosisServerList">
+        {% for srv in servers %}
+        <label class="dl-server-item">
+          <input type="checkbox" name="server_id" value="{{ srv.id }}" disabled>
+          <span class="mono">{{ srv.hostname }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:20px">
+        <button type="submit" class="btn btn-ghost" formaction="{{ url_for('reports.excel_report') }}" formtarget="_blank" {{ 'disabled' if pending_manual }}>Excel 다운로드</button>
+        <button type="submit" class="btn btn-primary" formaction="{{ url_for('reports.pdf_report') }}" formtarget="_blank" {{ 'disabled' if pending_manual }}>PDF 다운로드</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="panel reveal">
+    <div class="panel-title"><span>조치 보고서</span></div>
+    <p class="empty-note" style="padding:0 0 18px; text-align:left">
+      실제로 완료된 조치만 포함됩니다. 자동 조치는 관리자가 실행까지, 수동 조치는 실무자가
+      조치 내용을 남기고 <a href="{{ url_for('approvals.list_approvals') }}">완료 처리</a>까지 마친 건만 들어갑니다.
+    </p>
+    {% if pending_action %}
+    <div class="flash flash-warning" style="margin:0 0 16px">
+      실행 대기 중인 조치 {{ pending_action }}건이 있어 생성할 수 없습니다 (자동 조치 실행 대기 또는 수동 조치 완료 처리 대기).
+      <a href="{{ url_for('approvals.list_approvals', status='approved') }}">지금 처리하러 가기 ›</a>
+    </div>
+    {% endif %}
+    <form method="get" id="actionReportForm">
+      <div class="dl-scope">
+        <label class="dl-scope-opt">
+          <input type="radio" name="dl_scope" value="all" checked> 전체 서버 ({{ servers|length }}대)
+        </label>
+        <label class="dl-scope-opt">
+          <input type="radio" name="dl_scope" value="pick"> 서버 선택
+        </label>
+      </div>
+      <div class="dl-server-list" id="actionServerList">
+        {% for srv in servers %}
+        <label class="dl-server-item">
+          <input type="checkbox" name="server_id" value="{{ srv.id }}" disabled>
+          <span class="mono">{{ srv.hostname }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:20px">
+        <button type="submit" class="btn btn-ghost" formaction="{{ url_for('reports.action_excel_report') }}" formtarget="_blank" {{ 'disabled' if pending_action }}>Excel 다운로드</button>
+        <button type="submit" class="btn btn-primary" formaction="{{ url_for('reports.action_pdf_report') }}" formtarget="_blank" {{ 'disabled' if pending_action }}>PDF 다운로드</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    document.querySelectorAll('#diagnosisReportForm, #actionReportForm').forEach((form) => {
+      const scopeRadios = form.querySelectorAll('input[name="dl_scope"]');
+      const checks = form.querySelectorAll('input[type=checkbox]');
+      function sync() {
+        const pick = form.querySelector('input[name="dl_scope"]:checked').value === 'pick';
+        checks.forEach((c) => { c.disabled = !pick; if (!pick) c.checked = false; });
+      }
+      scopeRadios.forEach((r) => r.addEventListener('change', sync));
+      form.addEventListener('submit', (e) => {
+        const pick = form.querySelector('input[name="dl_scope"]:checked').value === 'pick';
+        if (pick && ![...checks].some((c) => c.checked)) {
+          e.preventDefault();
+          alert('다운로드할 서버를 하나 이상 선택하세요.');
+        }
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -99,28 +99,33 @@ CHECK_IMPACT_MAP = {
     # 패치/로그 관리
     "U-46": ("reboot_required", "H"),
     "U-47": ("service_restart_minor", "L"),
-    # 웹 애플리케이션
-    "WEB-CI": ("app_deploy", "H"),
-    "WEB-SI": ("app_deploy", "H"),
-    "WEB-DI": ("service_restart_minor", "L"),
-    "WEB-EP": ("app_deploy", "M"),
-    "WEB-IL": ("app_deploy", "M"),
-    "WEB-XS": ("app_deploy", "H"),
-    "WEB-CF": ("app_deploy", "H"),
-    "WEB-SF": ("app_deploy", "H"),
-    "WEB-BF": ("instant_auth", "M"),
-    "WEB-IA": ("app_deploy", "H"),
-    "WEB-IN": ("app_deploy", "H"),
-    "WEB-PR": ("app_deploy", "M"),
-    "WEB-PV": ("app_deploy", "H"),
-    "WEB-FU": ("app_deploy", "H"),
-    "WEB-FD": ("app_deploy", "M"),
-    "WEB-IS": ("session_reset", "H"),
-    "WEB-SN": ("service_restart_major", "H"),
-    "WEB-CC": ("session_reset", "M"),
-    "WEB-AE": ("service_restart_minor", "M"),
-    "WEB-AU": ("app_deploy", "M"),
-    "WEB-WM": ("service_restart_minor", "L"),
+    # 웹 서비스 (Apache httpd 설정 기반 - ansible/scripts/web/w_01~26_web_check.sh 실제 로직 기준)
+    "WEB-01": ("instant_low", "L"),   # Tomcat/IIS/JEUS 전용, Apache 해당없음
+    "WEB-02": ("instant_low", "L"),
+    "WEB-03": ("instant_low", "L"),
+    "WEB-04": ("service_restart_minor", "L"),  # Options Indexes - httpd.conf 수정 + reload
+    "WEB-05": ("service_restart_minor", "M"),  # mod_cgi 비활성화 - 모듈 변경 + restart
+    "WEB-06": ("service_restart_minor", "L"),  # AllowOverride
+    "WEB-07": ("instant_low", "L"),            # 백업/샘플 파일 삭제
+    "WEB-08": ("service_restart_minor", "L"),  # LimitRequestBody
+    "WEB-09": ("service_restart_major", "M"),  # 구동 계정 변경 - 소유권 영향 있어 재시작 시 주의 필요
+    "WEB-10": ("service_restart_minor", "M"),  # mod_proxy/ProxyRequests
+    "WEB-11": ("service_restart_major", "M"),  # DocumentRoot 경로 변경(수동조치)
+    "WEB-12": ("service_restart_minor", "L"),  # FollowSymLinks
+    "WEB-13": ("instant_low", "L"),
+    "WEB-14": ("instant_low", "M"),            # 설정파일 권한 - httpd 재읽기 실패 리스크
+    "WEB-15": ("instant_low", "L"),
+    "WEB-16": ("service_restart_minor", "L"),  # ServerTokens/ServerSignature
+    "WEB-17": ("service_restart_minor", "L"),  # /icons,/manual alias 제거
+    "WEB-18": ("service_restart_minor", "M"),  # mod_dav 비활성화
+    "WEB-19": ("service_restart_minor", "L"),  # Includes(SSI)
+    "WEB-20": ("service_restart_major", "H"),  # HTTPS(mod_ssl) 적용 - 인증서 구성 포함
+    "WEB-21": ("service_restart_minor", "M"),  # HTTP->HTTPS 리다이렉트
+    "WEB-22": ("service_restart_minor", "L"),  # ErrorDocument
+    "WEB-23": ("instant_low", "L"),
+    "WEB-24": ("app_deploy", "M"),             # 업로드 검증(수동조치, 기능 미구현)
+    "WEB-25": ("service_restart_major", "H"),  # 패키지 보안패치 적용
+    "WEB-26": ("instant_low", "L"),            # 로그 디렉터리/파일 권한
 }
 
 _DEFAULT_IMPACT = ("instant_low", "L")

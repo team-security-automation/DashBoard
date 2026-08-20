@@ -70,15 +70,18 @@ def upload_csv():
 
     file = request.files.get("csv_file")
     if not file or file.filename == "":
-        flash("CSV 파일을 선택해주세요. (형식: hostname,ip,os_family,os_version,role_desc)", "warning")
+        flash("CSV 파일을 선택해주세요. (형식: hostname,ip,os_family,os_version,role_desc,"
+              "ssh_user,ssh_port,ssh_key_path,ssh_become)", "warning")
         return redirect(url_for("servers.list_servers"))
 
     content = file.stream.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content))
     created = 0
+    missing_ssh = []
     for row in reader:
         if not row.get("hostname"):
             continue
+        ssh_key_path = row.get("ssh_key_path", "").strip() or None
         srv = Server(
             hostname=row["hostname"].strip(),
             ip=row.get("ip", "").strip(),
@@ -87,11 +90,22 @@ def upload_csv():
             role_desc=row.get("role_desc", "").strip(),
             business_name=row.get("business_name", "").strip(),
             owner=row.get("owner", "").strip(),
+            # SSH 접속정보도 CSV로 같이 받아야 등록 즉시 진단 실행이 가능하다.
+            # 안 채우면 개별 서버 수정 화면에서 나중에 채울 때까지 인벤토리에서 빠진다.
+            ssh_user=row.get("ssh_user", "").strip() or "ansible",
+            ssh_port=int(row["ssh_port"]) if row.get("ssh_port", "").strip() else 22,
+            ssh_key_path=ssh_key_path,
+            ssh_become=(row.get("ssh_become", "").strip().lower() not in ("", "0", "false", "no")),
         )
         db.session.add(srv)
         created += 1
+        if not ssh_key_path:
+            missing_ssh.append(srv.hostname)
     db.session.commit()
-    flash(f"CSV 일괄 등록 완료: {created}건 등록되었습니다.", "success")
+    msg = f"CSV 일괄 등록 완료: {created}건 등록되었습니다."
+    if missing_ssh:
+        msg += f" (SSH 키 경로 미입력 {len(missing_ssh)}건: {', '.join(missing_ssh)} - 진단 실행 전 서버 수정에서 채워야 함)"
+    flash(msg, "success" if not missing_ssh else "warning")
     return redirect(url_for("servers.list_servers"))
 
 

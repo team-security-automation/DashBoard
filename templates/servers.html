@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="panel reveal">
+<div class="panel reveal servers-responsive">
   <div class="table-scroll">
   <table class="data data-compact">
     <thead>
@@ -29,7 +29,7 @@
         <td class="col-narrow col-hide-sm mono">{{ row.server.ip }}</td>
         <td class="col-narrow col-hide-sm">{{ row.server.os_label }}</td>
         <td class="col-narrow col-hide-sm">{{ row.server.role_desc }}{% if row.server.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
-        <td class="col-flex">{{ row.server.business_name }}</td>
+        <td class="col-flex" title="{{ row.server.business_name }}">{{ row.server.business_name }}</td>
         <td class="col-narrow col-hide-sm">{{ row.server.owner }}</td>
         <td class="col-narrow mono">{{ row.level }}</td>
         <td class="col-narrow"><span class="pill pill-{{ row.color }}">{{ row.grade }}</span></td>
@@ -48,12 +48,43 @@
     </tbody>
   </table>
   </div>
+
+  <!-- 창 폭이 좁으면(모바일/좁은 패널) 표 대신 카드로 쌓아서 옆으로 스크롤할 필요가 없게 한다. -->
+  <div class="server-card-list">
+    {% for row in rows %}
+    <div class="server-list-card">
+      <div class="server-list-card-top">
+        <a class="mono" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">{{ row.server.hostname }}</a>
+        <span class="pill pill-{{ row.color }} pill-xs">{{ row.grade }} · {{ row.level }}점</span>
+      </div>
+      {% if not row.server.ssh_key_path %}<span class="pill pill-warn pill-xs">SSH 미설정</span>{% endif %}
+      <div class="server-list-card-meta">
+        <span class="mono">{{ row.server.ip }}</span>
+        <span>{{ row.server.os_label }}</span>
+        <span>{{ row.server.role_desc }}{% if row.server.is_web_db %} · Web/DB{% endif %}</span>
+        <span>{{ row.server.business_name }}</span>
+        {% if row.server.owner %}<span>담당자 {{ row.server.owner }}</span>{% endif %}
+      </div>
+      <div class="server-list-card-actions row-actions">
+        <a class="btn btn-ghost btn-xs" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">상세</a>
+        {% if current_user.role == 'admin' %}
+        <a class="btn btn-ghost btn-xs" href="{{ url_for('servers.edit_server', server_id=row.server.id) }}">수정</a>
+        <form method="post" action="{{ url_for('servers.delete_server', server_id=row.server.id) }}"
+              onsubmit="return confirm('서버 {{ row.server.hostname }}를 삭제할까요? 관련 진단 이력도 함께 삭제됩니다.');" style="display:inline">
+          <button class="btn btn-danger btn-xs" type="submit">삭제</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 
 <div class="modal-overlay" id="csvModal">
   <div class="modal">
     <h3>CSV 일괄 등록</h3>
-    <p class="modal-desc">헤더: <span class="mono">hostname,ip,os_family,os_version,role_desc,business_name,owner</span></p>
+    <p class="modal-desc">헤더: <span class="mono">hostname,ip,os_family,os_version,role_desc,business_name,owner,ssh_user,ssh_port,ssh_key_path,ssh_become</span><br>
+    (ssh_key_path를 비워두면 등록은 되지만 "SSH 미설정"으로 표시되어 진단 실행 시 인벤토리에서 빠집니다)</p>
     <form method="post" action="{{ url_for('servers.upload_csv') }}" enctype="multipart/form-data">
       <input type="file" name="csv_file" accept=".csv" required>
       <div class="modal-actions">

@@ -190,7 +190,15 @@ def _gen_history(server, base_score, days=14):
     return snaps
 
 
-def seed():
+def seed(demo=False):
+    """
+    앱 최초 실행 시 app.py가 자동으로 호출한다.
+    기본값(demo=False)은 실제 운영에 꼭 필요한 최소 데이터만 만든다:
+    로그인 계정 3개 + 점검항목 카탈로그. 서버/진단결과는 전부 비워두고,
+    실제 서버 등록 + 진단 실행(Ansible)으로만 채워지게 한다.
+    demo=True일 때만 가짜 서버 5대 + 가짜 진단결과/승인/이력을 추가로 만든다
+    (화면 데모용, `python seed_data.py --demo`로만 실행됨 - 자동 실행 안 됨).
+    """
     db.drop_all()
     db.create_all()
 
@@ -202,6 +210,11 @@ def seed():
 
     # 점검항목 카탈로그
     items = _create_items()
+
+    if not demo:
+        db.session.commit()
+        return
+
     unix_items = [(c, items[c]) for c, *_ in UNIX_ITEMS]
     web_items = [(c, items[c]) for c, *_ in WEB_ITEMS]
 
@@ -330,8 +343,14 @@ def seed():
 
 
 if __name__ == "__main__":
+    import sys
+    demo = "--demo" in sys.argv
     from app import create_app
     app = create_app()
     with app.app_context():
-        seed()
-        print("시드 데이터 생성 완료.")
+        seed(demo=demo)
+        if demo:
+            print("데모 데이터(가짜 서버 5대 + 가짜 진단결과) 생성 완료.")
+        else:
+            print("기본 데이터(로그인 계정 + 점검항목 카탈로그)만 생성 완료. "
+                  "서버는 /servers에서 직접 등록하세요.")

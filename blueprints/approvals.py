@@ -88,7 +88,7 @@ def detail(req_id):
                             before_result=before_result)
 
 
-def _execute_remediation(ar, performed_by_suffix):
+def _execute_remediation(ar, performed_by_suffix, work_note=None):
     """백업 -> 조치 -> 재진단 -> 전후비교 기록. 자동 승인 직후 / 수동 완료 처리 양쪽에서 공용으로 쓴다."""
     srv = ar.server
     ci = ar.check_item
@@ -112,6 +112,7 @@ def _execute_remediation(ar, performed_by_suffix):
     level_after, _, _, _ = calc_security_level(srv.latest_results())
     ar.before_score = level_before
     ar.after_score = level_after
+    ar.work_note = work_note
 
     hist = ActionHistory(
         approval_id=ar.id, server_id=srv.id, check_item_id=ci.id,
@@ -119,6 +120,7 @@ def _execute_remediation(ar, performed_by_suffix):
         before_score=before_score, after_score=0.0,
         performed_by=f"{ar.approver} 승인 · {performed_by_suffix}",
         performed_at=datetime.utcnow(), backup_path=ar.backup_path,
+        work_note=work_note,
     )
     db.session.add(hist)
     db.session.commit()
@@ -153,21 +155,46 @@ def decide(req_id):
         return redirect(url_for("approvals.list_approvals", status="rejected"))
 
     # ---- 승인 -----------------------------------------------------------
-    # remediation_type == "auto"  : 승인 즉시 백업 -> 조치 -> 재진단까지 자동 실행
-    # remediation_type == "manual": 승인만 기록하고 조치는 실행하지 않음.
-    #                                실무자가 직접 조치한 뒤 "수동 조치 완료 처리"를 눌러야
-    #                                ScanResult가 갱신된다 (아래 complete_manual 참고).
+    # 승인자의 "승인"은 허가일 뿐, 조치 실행과는 분리한다. remediation_type과
+    # 무관하게 여기서는 상태만 "approved"로 바꾸고 끝낸다.
+    #   remediation_type == "auto"  : 실무자가 "자동 조치 실행" 버튼을 눌러야
+    #                                  execute()가 백업 -> 조치 -> 재진단을 수행한다.
+    #   remediation_type == "manual": 실무자가 직접 조치한 뒤 "수동 조치 완료 처리"를
+    #                                  눌러야 ScanResult가 갱신된다 (complete_manual 참고).
     ar.status = "approved"
+    ar.approve_note = request.form.get("note", "").strip() or None
     db.session.commit()
 
     if ar.remediation_type == "manual":
         flash("승인 완료: 이 항목은 수동 조치 대상입니다. 실무자가 직접 조치한 뒤 "
               "'수동 조치 완료 처리' 버튼을 눌러야 재진단·점수 반영이 됩니다.", "warning")
+    else:
+        flash("승인 완료: 조치 실행 대기 상태입니다. 실무자가 '자동 조치 실행' 버튼을 눌러야 "
+              "백업·설정 변경·재진단이 진행됩니다.", "warning")
+    return redirect(url_for("approvals.detail", req_id=req_id))
+
+
+@approvals_bp.route("/<int:req_id>/execute", methods=["POST"])
+@login_required
+def execute(req_id):
+    """승인된 자동조치 항목을 실무자가 직접 실행한다 (승인과 실행을 분리)."""
+    ar = ApprovalRequest.query.get_or_404(req_id)
+    if current_user.role != "admin":
+        flash("자동 조치 실행은 실무자(관리자) 권한이 필요합니다.", "warning")
         return redirect(url_for("approvals.detail", req_id=req_id))
 
-    level_before, level_after = _execute_remediation(ar, "자동 조치 실행")
-    flash(f"승인 완료: 백업 후 조치를 실행하고 재진단했습니다. "
-          f"서버 보안점수가 {level_before}점에서 {level_after}점으로 올랐습니다.", "success")
+    if ar.status != "approved" or ar.remediation_type != "auto":
+        flash("자동 조치 실행 대상이 아닙니다.", "info")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
+    if ar.executed_at is not None:
+        flash("이미 실행된 요청입니다.", "info")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
+    level_before, level_after = _execute_remediation(
+        ar, f"{current_user.display_name}({current_user.username}) 자동 조치 실행"
+    )
+    flash(f"자동 조치를 실행했습니다. 서버 보안점수가 {level_before}점에서 {level_after}점으로 올랐습니다.", "success")
     return redirect(url_for("approvals.detail", req_id=req_id))
 
 
@@ -187,8 +214,14 @@ def complete_manual(req_id):
         flash("이미 완료 처리된 요청입니다.", "info")
         return redirect(url_for("approvals.detail", req_id=req_id))
 
+    work_note = request.form.get("work_note", "").strip()
+    if not work_note:
+        flash("수동 조치 완료 처리는 실제로 무엇을/어떻게 조치했는지 조치 내용을 남겨야 합니다.", "warning")
+        return redirect(url_for("approvals.detail", req_id=req_id))
+
     level_before, level_after = _execute_remediation(
-        ar, f"{current_user.display_name}({current_user.username}) 수동 조치 완료 처리"
+        ar, f"{current_user.display_name}({current_user.username}) 수동 조치 완료 처리",
+        work_note=work_note,
     )
     flash(f"수동 조치 완료 처리했습니다. 서버 보안점수가 {level_before}점에서 {level_after}점으로 올랐습니다.", "success")
     return redirect(url_for("approvals.detail", req_id=req_id))

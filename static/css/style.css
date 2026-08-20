@@ -30,12 +30,13 @@
   --warn: #D97706;
   --warn-dim: rgba(217, 119, 6, 0.15);
 
-  /* 취약 위험도 상/중/하 전용 스케일 — 채도/색상(빨강→주황→금색)로 구분해서
-     상이 가장 진하고 뜨겁고, 하로 갈수록 옅고 차분해지도록 둔다. */
-  --risk-m: #E8650E;
-  --risk-m-dim: rgba(232, 101, 14, 0.15);
-  --risk-l: #B7871A;
-  --risk-l-dim: rgba(183, 135, 26, 0.18);
+  /* 취약 위험도 상/중/하 전용 스케일 — 하나의 붉은-주황 색상(hue)만 쓰고 채도/명도만
+     단계적으로 낮춰서 세 색이 "같은 위험 스펙트럼의 농도 차이"로 읽히게 한다.
+     (상 vuln=#E11D2E, 중, 하가 색상 계열이 어긋나면 서로 다른 의미로 오해되기 쉬움) */
+  --risk-m: #F0530F;
+  --risk-m-dim: rgba(240, 83, 15, 0.15);
+  --risk-l: #F39820;
+  --risk-l-dim: rgba(243, 152, 32, 0.18);
   --manual: #6E56CF;
   --manual-dim: rgba(110, 86, 207, 0.13);
 
@@ -217,6 +218,18 @@ a { color: inherit; text-decoration: none; }
 .kpi-card-primary .pill::before { display: none; }
 .kpi-link { font-size: 14.5px; color: var(--accent); font-weight: 600; }
 
+/* ---------- Approver alert (대시보드 상단, 승인자 로그인 시에만) ------------------- */
+.approver-alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: var(--accent); color: #fff;
+  border-radius: var(--radius-md); padding: 22px 30px;
+  box-shadow: 0 10px 24px rgba(16,18,22,.16);
+}
+.approver-alert-text { font-size: 17px; font-weight: 600; }
+.approver-alert-text strong { font-size: 24px; font-weight: 800; margin-right: 6px; }
+.approver-alert .btn-primary { background: #fff; color: var(--accent); }
+.approver-alert .btn-primary:hover { filter: none; background: rgba(255,255,255,.9); }
+
 /* ---------- Server strip -------------------------------------------------- */
 .server-strip {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px;
@@ -256,9 +269,9 @@ a { color: inherit; text-decoration: none; }
 .pill-manual::before { background: var(--manual); }
 .pill-risk-H { color: #B3121F; }
 .pill-risk-H::before { background: var(--vuln); }
-.pill-risk-M { color: #A34D0B; }
+.pill-risk-M { color: #B33D0A; }
 .pill-risk-M::before { background: var(--risk-m); }
-.pill-risk-L { color: #8A6A14; }
+.pill-risk-L { color: #9B5B08; }
 .pill-risk-L::before { background: var(--risk-l); }
 
 /* ---------- Bars ------------------------------------------------------------ */
@@ -322,7 +335,7 @@ a { color: inherit; text-decoration: none; }
 .hm-chip.good { background: var(--good); color: #fff; }
 .hm-chip.vuln-H { background: var(--vuln); color: #fff; }
 .hm-chip.vuln-M { background: var(--risk-m); color: #fff; }
-.hm-chip.vuln-L { background: var(--risk-l-dim); color: #7A5A0F; }
+.hm-chip.vuln-L { background: var(--risk-l-dim); color: #9B5B08; }
 .hm-chip.manual { background: var(--manual); color: #fff; }
 .hm-chip.na { background: var(--bg-elevated-2); color: var(--text-muted); }
 .hm-chip:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -352,22 +365,40 @@ a { color: inherit; text-decoration: none; }
 
 /* ---------- Tables ------------------------------------------------------------- */
 .table-scroll { overflow-x: auto; }
-/* width:100%를 강제하면 auto 레이아웃 브라우저가 남는 폭을 컬럼마다 제멋대로
-   나눠줘서 내용 짧은 칸 사이가 붕 떠 보이는 문제가 있었다 (한 칸에 몰아줘도
-   그 칸 안에서 같은 문제가 재발함). 그냥 내용 크기에 맞춰 자연스럽게 잡히게
-   두고, 패널보다 넓어지는 극단적인 경우에만 .table-scroll이 가로 스크롤을 받는다. */
-table.data { width: auto; max-width: 100%; border-collapse: collapse; }
+/* width:100%로 패널 폭을 그대로 채운다. col-flex 칸(업무명/역할 등 가변 텍스트)이
+   남는 폭을 흡수하도록 폭 제약 없이 두고, 나머지 칸은 col-narrow(nowrap)로 내용
+   크기만큼만 차지해서 표가 패널 오른쪽까지 자연스럽게 채워지게 한다. */
+table.data { width: 100%; max-width: 100%; border-collapse: collapse; }
 table.data th {
   text-align: left; font-size: 14.5px; color: var(--text-muted); font-weight: 600;
   padding: 14px 16px; border-bottom: 1px solid var(--border-soft); white-space: nowrap;
 }
 table.data td { padding: 18px 16px; border-bottom: 1px solid var(--border-soft); font-size: 16px; vertical-align: middle; }
 table.data td.nowrap, table.data td.mono, table.data td.col-narrow, table.data th.col-narrow { white-space: nowrap; }
+/* col-flex는 남는 폭을 가져가는 칸(업무명/역할 등) - 줄바꿈을 막아서 내용 길이에
+   따라 행 높이가 들쭉날쭉해지는 걸 막는다. (auto 레이아웃에서 여기에 max-width로
+   말줄임표를 강제하면 컬럼 자체가 거의 0폭으로 짜부라지는 문제가 있어 쓰지 않는다 -
+   대신 아주 긴 값은 .table-scroll의 가로 스크롤로 자연스럽게 흡수된다.) */
+table.data td.col-flex { white-space: nowrap; }
 /* 창 폭이 좁으면(사이드바+여백 다 빼고 나면 9칸짜리 표는 압축해도 안 들어갈 수 있다)
    우선순위 낮은 칸부터 아예 숨겨서 스크롤 없이 핵심 정보만 한눈에 보이게 한다.
    숨겨진 정보는 '상세' 페이지에서 그대로 볼 수 있다. */
-@media (max-width: 1300px) {
+@media (max-width: 1500px) {
   table.data td.col-hide-sm, table.data th.col-hide-sm { display: none; }
+}
+
+/* ---------- Servers list: narrow width -> stacked cards instead of a wide table -------- */
+.servers-responsive .server-card-list { display: none; flex-direction: column; gap: 12px; }
+.server-list-card {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;
+}
+.server-list-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 16px; font-weight: 700; }
+.server-list-card-meta { display: flex; flex-wrap: wrap; gap: 5px 14px; font-size: 13.5px; color: var(--text-secondary); }
+.server-list-card-actions { display: flex; gap: 6px; margin-top: 4px; }
+@media (max-width: 720px) {
+  .servers-responsive .table-scroll { display: none; }
+  .servers-responsive .server-card-list { display: flex; }
 }
 table.data.data-compact td, table.data.data-compact th { padding: 12px 14px; font-size: 15px; }
 table.data tr:hover td { background: var(--bg-elevated); }
@@ -437,14 +468,74 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .inline-form { display: inline-flex; gap: 8px; align-items: center; }
 
 /* 승인목록에서 바로 승인/거부하는 인라인 액션 - 표 안이라 좁으므로 사유 입력칸도 압축 */
+/* 승인/거부 버튼을 누르기 전엔 버튼만, 누르면 그 자리에서 입력칸+확인/취소가 펼쳐진다
+   (거부는 사유 필수, 승인은 참고 메모 선택) - approvals_list.html / approval_detail.html 공용. */
+/* 말풍선 팝오버로 뜬다 (인라인으로 펼치면 표 안에서는 폭이 부족해 flexbox가 입력칸을
+   찌그러뜨리는 문제가 있었다 - 팝오버는 정상 흐름에서 빠지므로 그 문제가 없다). */
+.decide-form { display: inline-flex; align-items: center; position: relative; }
+.decide-inline {
+  display: none; align-items: center; gap: 8px;
+  position: absolute; top: 50%; left: calc(100% + 12px); transform: translateY(-50%);
+  z-index: 30; background: var(--bg-surface); border-radius: var(--radius-sm);
+  padding: 9px 12px; box-shadow: var(--shadow-md);
+}
+.decide-inline::before {
+  content: ''; position: absolute; top: 50%; left: -5px; transform: translateY(-50%) rotate(45deg);
+  width: 10px; height: 10px; background: var(--bg-surface);
+  box-shadow: -1px 1px 2px rgba(16,18,22,.05);
+}
+.decide-form.open .decide-open { display: none; }
+.decide-form.open .decide-inline { display: inline-flex; }
+.decide-input { width: 150px; padding: 6px 9px; font-size: 13.5px; flex-shrink: 0; }
+.approval-actions .decide-input { width: 240px; padding: 11px 14px; font-size: 15px; }
+
+/* ---------- Status badges (실행 상태/승인 상태 같은 "지금 상태"용, 점+텍스트보다
+   진하게 눈에 띄어야 하는 값) — 나머지 pill(분류/태그)은 절제된 dot 스타일 유지 ------ */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13.5px; font-weight: 700; line-height: 1;
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+.badge-good { background: var(--good-dim); color: #157A3E; }
+.badge-vuln { background: var(--vuln-dim); color: #B3121F; }
+.badge-warn { background: var(--warn-dim); color: #8A5A08; }
+.badge-neutral { background: var(--bg-elevated-2); color: var(--text-secondary); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
+.badge-clickable { cursor: pointer; transition: filter .12s, transform .12s; }
+.badge-clickable:hover { filter: brightness(0.96); transform: translateY(-1px); }
+.badge-clickable::after { content: '›'; font-weight: 800; opacity: .7; }
 
 /* ---------- Diagnosis progress ------------------------------------------------------ */
-.progress-box { margin-top: 20px; padding: 18px; background: var(--bg-elevated); border-radius: var(--radius-sm); }
-.progress-head { display: flex; justify-content: space-between; font-size: 15px; margin-bottom: 8px; }
-.progress-track { height: 8px; }
-.progress-sub { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
-.progress-servers { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.progress-servers span { font-size: 13.5px; padding: 3px 8px; border-radius: 999px; background: var(--good-dim); color: #157A3E; font-family: var(--font-mono); }
+.progress-box {
+  margin-top: 20px; padding: 24px 26px; background: var(--bg-elevated);
+  border-radius: var(--radius-md); border: 1px solid var(--border-soft);
+}
+.progress-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+.progress-head #progressCount { font-size: 15px; color: var(--text-secondary); font-weight: 600; }
+.progress-track { height: 8px; border-radius: 999px; }
+.bar-vuln { background: var(--vuln); }
+
+/* 서버별 독립 진행 레인 - 여러 서버를 동시에 진단할 때 서버마다 자기 줄에서만
+   진행되게 보여준다 (하나의 공유 표시줄이 서버 사이를 왔다갔다하던 문제 해결). */
+.progress-lanes { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.progress-lane {
+  padding: 12px 14px; background: var(--bg-surface); border-radius: var(--radius-sm);
+}
+.progress-lane-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 14.5px; margin-bottom: 8px;
+}
+.progress-lane-head strong { font-family: var(--font-mono); }
+.progress-track-sm { height: 5px; border-radius: 999px; }
+.progress-lane-sub {
+  font-size: 13px; color: var(--text-secondary); margin-top: 8px; line-height: 1.6;
+}
+
+.progress-done {
+  margin-top: 16px; padding: 14px 16px; background: var(--good-dim);
+  border-radius: var(--radius-sm); font-size: 14.5px; color: #157A3E;
+}
+.progress-done .form-actions { border-top: none; }
 
 /* ---------- Simulation mode caption (quiet, not a banner) ------------------------------------------------------ */
 .mode-caption {
@@ -466,6 +557,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .approval-actions { display: flex; justify-content: space-between; gap: 14px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-soft); flex-wrap: wrap; }
 .reject-form input { width: 220px; }
 .result-box { margin-top: 20px; padding: 14px 16px; border-radius: var(--radius-sm); font-size: 15.5px; line-height: 1.7; background: var(--bg-elevated); border-left: 3px solid var(--border); }
+.approval-guide-box { background: var(--bg-elevated); border-radius: var(--radius-sm); padding: 14px 16px; margin: 14px 0; }
+.approval-guide-box .meta-label { margin-bottom: 6px; }
+.approval-guide-box .guide-text { margin: 0; }
 .result-good { border-left-color: var(--good); }
 .result-bad { border-left-color: var(--vuln); }
 .result-warn { border-left-color: var(--warn); }
@@ -607,6 +701,27 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .review-field-value { margin: 0; font-size: 15.5px; color: var(--text-primary); line-height: 1.55; }
 .review-field-value.review-field-muted { color: var(--text-secondary); font-size: 15px; }
 .review-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 4px; }
+
+.review-back-link { display: inline-flex; align-items: center; gap: 4px; font-size: 14.5px; color: var(--text-muted); margin-bottom: 18px; font-weight: 600; }
+.review-back-link:hover { color: var(--accent); }
+.review-server-heading { display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px; }
+.review-server-heading h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+
+.review-server-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px;
+}
+.review-server-card {
+  background: var(--bg-surface); border-radius: var(--radius-md); padding: 26px 26px 24px;
+  box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px;
+  transition: box-shadow .18s, transform .18s;
+}
+.review-server-card:hover { box-shadow: var(--shadow-md), 0 0 0 1.5px var(--accent); transform: scale(1.015); }
+.review-server-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 15.5px; }
+.review-server-count {
+  font-family: var(--font-ui); font-size: 40px; font-weight: 800; letter-spacing: -.02em; line-height: 1;
+}
+.review-server-count small { font-size: 15px; color: var(--text-muted); font-weight: 500; margin-left: 4px; }
+.review-server-card-sub { font-size: 13.5px; color: var(--text-muted); }
 
 .review-empty {
   display: none; flex-direction: column; align-items: center; justify-content: center;

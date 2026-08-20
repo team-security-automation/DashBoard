@@ -7,6 +7,8 @@
 확정하는 화면. 조치 승인 절차(approvals)와 달리 백업·재진단이 필요한 원격
 조치가 아니라 "판정" 그 자체이므로, 확정 즉시 진단 결과에 반영한다.
 """
+from collections import OrderedDict
+
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 
@@ -15,6 +17,8 @@ from models import Server, ScanResult, RISK_LABEL
 from scoring import calc_security_level, grade_of, item_score_value, GRADE_COLOR
 
 review_bp = Blueprint("review", __name__, url_prefix="/review")
+
+_RISK_ORDER = {"H": 0, "M": 1, "L": 2}
 
 
 def pending_manual_rows():
@@ -31,6 +35,23 @@ def pending_manual_count():
     return len(pending_manual_rows())
 
 
+def _group_by_server(rows):
+    by_server = OrderedDict()
+    for srv, r in rows:
+        by_server.setdefault(srv, []).append(r)
+    return by_server
+
+
+def _server_summaries(by_server):
+    """서버 목록 화면에 쓸 요약 - 서버당 미확인 건수와 그 중 가장 급한 위험도."""
+    summaries = []
+    for srv, rs in by_server.items():
+        top_risk = min((r.check_item.risk_level for r in rs), key=lambda x: _RISK_ORDER.get(x, 9))
+        summaries.append(dict(server=srv, count=len(rs), top_risk=top_risk))
+    summaries.sort(key=lambda s: (-s["count"], _RISK_ORDER.get(s["top_risk"], 9)))
+    return summaries
+
+
 def _overall_avg_score():
     servers = Server.query.all()
     if not servers:
@@ -44,16 +65,26 @@ def _overall_avg_score():
 @login_required
 def index():
     rows = pending_manual_rows()
-    cards = [
-        dict(scan_result_id=r.id, server=srv, ci=r.check_item,
-             current_setting=r.current_setting, evidence=r.evidence)
-        for srv, r in rows
-    ]
+    by_server = _group_by_server(rows)
+
+    server_id = request.args.get("server_id", type=int)
+    selected_server = db.session.get(Server, server_id) if server_id else None
+
+    cards = []
+    if selected_server:
+        cards = [
+            dict(scan_result_id=r.id, server=selected_server, ci=r.check_item,
+                 current_setting=r.current_setting, evidence=r.evidence)
+            for r in by_server.get(selected_server, [])
+        ]
+
     avg_score, avg_grade = _overall_avg_score()
     return render_template(
         "review.html",
+        server_summaries=_server_summaries(by_server),
+        selected_server=selected_server,
         cards=cards,
-        pending_count=len(cards),
+        pending_count=len(rows),
         avg_score=avg_score,
         avg_grade=avg_grade,
         avg_color=GRADE_COLOR.get(avg_grade, "warn"),

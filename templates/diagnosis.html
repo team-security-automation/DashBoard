@@ -32,7 +32,7 @@
             <td class="col-narrow"><input type="checkbox" name="server_ids" value="{{ s.id }}" class="srv-check"></td>
             <td class="col-narrow mono">{{ s.hostname }}</td>
             <td class="col-narrow">{{ s.os_label }}</td>
-            <td class="col-flex">{{ s.role_desc }}{% if s.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
+            <td class="col-flex" title="{{ s.role_desc }}">{{ s.role_desc }}{% if s.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
             <td class="col-narrow mono">{{ s.ip }}</td>
           </tr>
           {% endfor %}
@@ -59,8 +59,8 @@
         <span id="progressCount" class="mono">0 / 0</span>
       </div>
       <div class="bar-track progress-track"><div class="bar-fill bar-accent" id="progressBar" style="width:0%"></div></div>
-      <div class="progress-sub mono" id="progressSub" style="display:none"></div>
-      <div class="progress-servers" id="progressServers"></div>
+      <div class="progress-lanes" id="progressLanes"></div>
+      <div class="progress-done" id="progressDone" style="display:none"></div>
       {% if active_run %}
       <form method="post" action="{{ url_for('diagnosis.stop_scan', run_id=active_run.id) }}"
             style="margin-top:10px" onsubmit="return confirm('진행 중인 진단을 중지할까요?')">
@@ -81,19 +81,25 @@
         {% for r in runs %}
         <tr>
           <td class="col-narrow mono">{{ (r.started_at | kst).strftime('%Y-%m-%d %H:%M') }}</td>
-          <td class="col-narrow">{{ r.total }}대</td>
+          <td class="col-flex">
+            {% set names = [] %}
+            {% for sid in r.server_id_list() %}
+              {% if names.append(server_map[sid].hostname if sid in server_map else '삭제된 서버#' ~ sid) %}{% endif %}
+            {% endfor %}
+            <span title="{{ names|join(', ') }}">{{ names|join(', ') if names|length <= 3 else (names[:3]|join(', ') ~ ' 외 ' ~ (names|length - 3) ~ '대') }}</span>
+          </td>
           <td class="col-narrow mono">
             {% if r.finished_at %}{{ ((r.finished_at - r.started_at).total_seconds())|round(0)|int }}초{% else %}-{% endif %}
           </td>
           <td class="col-narrow">
-            {% if r.status == 'completed' %}<span class="pill pill-good pill-xs">완료</span>
-            {% elif r.status == 'cancelled' %}<span class="pill pill-xs">중지됨</span>
+            {% if r.status == 'completed' %}<span class="badge badge-good">완료</span>
+            {% elif r.status == 'cancelled' %}<span class="badge badge-neutral">중지됨</span>
             {% elif r.status == 'failed' %}
-              <span class="pill pill-vuln pill-xs fail-reason-trigger" style="cursor:pointer; text-decoration:underline dotted"
-                    data-fail-reason="{{ r.fail_reason or '원인 정보가 없습니다.' }}">실패 (원인 보기)</span>
-            {% else %}<span class="pill pill-warn pill-xs">진행중</span>{% endif %}
+              <span class="badge badge-vuln badge-clickable fail-reason-trigger"
+                    data-fail-reason="{{ r.fail_reason or '원인 정보가 없습니다.' }}">실패 · 원인 보기</span>
+            {% else %}<span class="badge badge-warn">진행중</span>{% endif %}
           </td>
-          <td class="col-flex">{{ r.triggered_by }}</td>
+          <td class="col-flex" title="{{ r.triggered_by }}">{{ r.triggered_by }}</td>
         </tr>
         {% endfor %}
       </tbody>

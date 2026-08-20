@@ -58,21 +58,104 @@ def _guide_for_failure(raw_msg):
 REAL_TASK_WEIGHTS = [
     ("Gathering Facts", 5),
     ("원격 작업 디렉터리 생성", 5),
-    ("대상 OS 점검 스크립트 복사", 10),
-    ("공통 라이브러리 복사", 10),
+    ("점검 스크립트 로컬 압축 (전송 파일 수 최소화)", 2),
+    ("점검 스크립트 압축 파일 전송", 12),
+    ("점검 스크립트 원격 압축 해제", 4),
+    ("로컬 임시 압축파일 삭제", 2),
     ("점검 스크립트 일괄 실행 (표준 JSON 출력)", 55),
     ("결과 JSON 회수 (컨트롤 노드로)", 10),
     ("원격 작업 디렉터리 삭제 (흔적 미잔존)", 5),
 ]
 _REAL_TASK_CUM = {}
+_REAL_TASK_INDEX = {}
 _c = 0
-for _name, _w in REAL_TASK_WEIGHTS:
+for _i, (_name, _w) in enumerate(REAL_TASK_WEIGHTS, start=1):
     _c += _w
     _REAL_TASK_CUM[_name] = _c
-del _c, _name, _w
+    _REAL_TASK_INDEX[_name] = _i
+del _c, _i, _name, _w
+REAL_TASK_TOTAL_STEPS = len(REAL_TASK_WEIGHTS)
 
 SCAN_RESULTS_DIR = Path(ANSIBLE_DIR).parent / "scan_results"
 PLAYBOOK_RELATIVE_PATH = "playbooks/diagnose.yml"
+SCRIPTS_ROOT = Path(ANSIBLE_DIR) / "scripts"
+# playbooks/diagnose.yml의 remote_work_dir과 반드시 같은 값이어야 한다.
+REMOTE_WORK_DIR = "/tmp/security_check"
+
+_RUN_TASK_NAME = "점검 스크립트 일괄 실행 (표준 JSON 출력)"
+# "이 태스크 시작 직전까지의 누적 %" - 목록에서 _RUN_TASK_NAME 앞까지의
+# 가중치 합. 하드코딩 안 해서 앞단 태스크 구성이 바뀌어도 자동으로 맞는다.
+_RUN_TASK_BASE = sum(w for n, w in REAL_TASK_WEIGHTS[:[n for n, _ in REAL_TASK_WEIGHTS].index(_RUN_TASK_NAME)])
+_RUN_TASK_WEIGHT = dict(REAL_TASK_WEIGHTS)[_RUN_TASK_NAME]
+
+
+def _os_group_name(server):
+    return server.os_family.strip().lower().replace(" ", "_")
+
+
+def _total_check_items(os_group):
+    d = SCRIPTS_ROOT / os_group
+    return sum(1 for _ in d.rglob("*_check.sh")) or 1
+
+
+def _poll_item_progress(run_id, server, hostnames, stop_event):
+    """
+    "점검 스크립트 일괄 실행" 태스크는 ansible 입장에서 하나의 shell 명령이라
+    끝나야만 이벤트가 오고, 그 안에서 67개 스크립트가 몇 개 끝났는지는 알 수
+    없다. run_all.sh가 스크립트 하나 끝날 때마다 run_all.progress에 한 줄씩
+    남기므로, 이 스레드가 별도 SSH로 그 줄 수를 주기적으로 세서(%) 갱신한다.
+    ansible 플레이북 실행 자체와는 무관한 "곁다리 관찰용" 연결이라 실패해도
+    (아직 파일이 없거나 등) 진단 자체에는 영향을 주지 않는다.
+    """
+    import subprocess
+
+    # server(ORM 객체)의 속성을 여기서 미리 값으로 뽑아둔다. 이 스레드는 메인 스레드가
+    # app_context를 빠져나가 DB 세션이 정리된 뒤에도 몇 초씩 더 살아있는데, 그 시점에
+    # server.hostname 같은 속성에 접근하면 DetachedInstanceError로 죽었었다
+    # (실제 진단 결과에는 영향 없는 곁다리 스레드지만 로그가 지저분해지고 그 서버의
+    # 세부 진행률 표시가 중간에 멈추는 부작용이 있었다).
+    hostname = server.hostname
+    ssh_key_path = server.ssh_key_path
+    ssh_port = server.ssh_port
+    ssh_user = server.ssh_user
+    ip = server.ip
+    os_family = server.os_family
+
+    os_group = os_family.strip().lower().replace(" ", "_")
+    total_items = _total_check_items(os_group)
+    remote_progress = f"{REMOTE_WORK_DIR}/{os_group}/run_all.progress"
+    ssh_cmd = [
+        "ssh", "-i", ssh_key_path,
+        "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+        "-p", str(ssh_port or 22),
+        f"{ssh_user}@{ip}",
+        f"wc -l < {remote_progress} 2>/dev/null || echo 0",
+    ]
+    while not stop_event.wait(2):
+        try:
+            out = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=8)
+            count = int((out.stdout or "0").strip() or 0)
+        except Exception:
+            continue
+        frac = min(count / total_items, 1.0)
+        candidate = _RUN_TASK_BASE + frac * _RUN_TASK_WEIGHT
+        # 서버별로 독립된 진행 상태를 들고 있는다(host_detail) - 여러 서버가 동시에
+        # 돌 때 한 서버의 이벤트가 다른 서버 진행률을 덮어써서 화면이 왔다갔다/역행하는
+        # 문제가 있었다. 이제 서버마다 자기 자리에만 쓴다.
+        prog = _SCAN_PROGRESS.setdefault(run_id, {"host_detail": {}, "hosts": hostnames})
+        hd = prog.setdefault("host_detail", {})
+        entry = hd.setdefault(hostname, {})
+        current = entry.get("pct", 0)
+        # 이미 ansible 이벤트로 이 태스크가 끝난 걸로 표시됐으면(>= base+weight)
+        # 더 이상 이 폴러가 값을 되돌리지 않는다.
+        if entry.get("status") != "완료" and current < _RUN_TASK_BASE + _RUN_TASK_WEIGHT:
+            entry["pct"] = max(current, candidate)
+            entry["status"] = "진행중"
+            entry["task"] = f"{_RUN_TASK_NAME} ({count}/{total_items}항목)"
+            entry["step_index"] = _REAL_TASK_INDEX[_RUN_TASK_NAME]
+            entry["step_total"] = REAL_TASK_TOTAL_STEPS
+            entry["item_done"] = count
+            entry["item_total"] = total_items
 
 # 점검 스크립트마다 "사람이 봐야 함" 상태를 다른 문구로 보낼 수 있어(수동확인 필요/
 # 수동조치필요 등) 대시보드 표준값("수동확인")으로 맞춘다.
@@ -97,6 +180,12 @@ def _require_admin():
 def _run_scan_simulated(app, run_id, server_ids, seconds_per_server):
     with app.app_context():
         run = db.session.get(ScanRun, run_id)
+        id_to_hostname = {s.id: s.hostname for s in Server.query.filter(Server.id.in_(server_ids)).all()}
+        hostnames = [id_to_hostname.get(sid, f"#{sid}") for sid in server_ids]
+        # 시뮬레이션은 서버를 순서대로 하나씩 처리하지만, 화면에는 실행 전(대기)/
+        # 실행 중/완료 상태를 서버마다 각자 보여줘야 하니 미리 전부 "대기"로 깔아둔다.
+        host_detail = {h: {"status": "대기"} for h in hostnames}
+        _SCAN_PROGRESS[run_id] = {"host_detail": host_detail, "hosts": hostnames}
         for sid in server_ids:
             if run_id in _CANCEL_REQUESTED:
                 break
@@ -115,14 +204,15 @@ def _run_scan_simulated(app, run_id, server_ids, seconds_per_server):
             # 카테고리 하나가 너무 빨리 지나가면 진행 상황이 안 보이니 최소 대기시간을 둔다.
             per_cat_sleep = max(seconds_per_server / cat_total, 0.35)
 
-            _SCAN_PROGRESS[run_id] = dict(
-                server=srv.hostname, cat_index=0, cat_total=cat_total,
+            host_detail[srv.hostname] = dict(
+                status="진행중", cat_index=0, cat_total=cat_total,
                 category=None, item_done=0, item_total=item_total,
+                step_index=0, step_total=cat_total,
             )
             for cat_index, (cat, rows) in enumerate(by_cat.items(), start=1):
                 if run_id in _CANCEL_REQUESTED:
                     break
-                _SCAN_PROGRESS[run_id].update(cat_index=cat_index, category=cat)
+                host_detail[srv.hostname].update(cat_index=cat_index, category=cat, step_index=cat_index)
                 time.sleep(per_cat_sleep)
                 new_rows = [
                     ScanResult(
@@ -135,9 +225,10 @@ def _run_scan_simulated(app, run_id, server_ids, seconds_per_server):
                 ]
                 db.session.add_all(new_rows)
                 item_done += len(rows)
-                _SCAN_PROGRESS[run_id]["item_done"] = item_done
+                host_detail[srv.hostname]["item_done"] = item_done
                 db.session.commit()
 
+            host_detail[srv.hostname]["status"] = "완료"
             run.completed = (run.completed or 0) + 1
             db.session.commit()
         run.status = "cancelled" if run_id in _CANCEL_REQUESTED else "completed"
@@ -222,7 +313,11 @@ def _run_scan_real(app, run_id, server_ids):
         inventory_path = generate_inventory(server_ids=server_ids)
         SCAN_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        _SCAN_PROGRESS[run_id] = {"hosts": {}, "percent": 0}
+        # 서버마다 독립된 진행칸(host_detail)을 미리 만들어둔다. ansible이 forks로
+        # 여러 서버를 동시에 처리하면 이벤트가 서버 순서와 무관하게 뒤섞여 들어오는데,
+        # 예전엔 이걸 하나의 공유 필드(current_server/step_index 등)에 덮어써서
+        # 화면이 "서버가 왔다갔다"하거나 단계가 역행하는 것처럼 보였다.
+        _SCAN_PROGRESS[run_id] = {"host_detail": {h: {"status": "대기"} for h in hostnames}, "hosts": hostnames}
         host_failures = {}
 
         def on_event(event):
@@ -230,38 +325,63 @@ def _run_scan_real(app, run_id, server_ids):
             task_name = data.get("task", "")
             host = data.get("host") or data.get("remote_addr")
             ev = event.get("event")
+            prog = _SCAN_PROGRESS.setdefault(run_id, {"host_detail": {}, "hosts": hostnames})
+            hd = prog.setdefault("host_detail", {})
             if ev in ("runner_on_unreachable", "runner_on_failed") and host:
                 res = data.get("res") or {}
                 raw_msg = res.get("msg") or data.get("res", {}).get("stderr") or str(res)
                 host_failures[host] = raw_msg
-            if event.get("event") == "runner_on_ok" and task_name in _REAL_TASK_CUM and host:
-                prog = _SCAN_PROGRESS.setdefault(run_id, {"hosts": {}, "percent": 0})
-                prog["hosts"][host] = _REAL_TASK_CUM[task_name]
-                prog["current_server"] = host
-                prog["task"] = task_name
-                total_weight = 100 * len(hostnames) or 1
-                prog["percent"] = round(
-                    sum(prog["hosts"].get(h, 0) for h in hostnames) / total_weight * 100, 1
-                )
+                entry = hd.setdefault(host, {})
+                entry["status"] = "실패"
+                entry["reason"] = _guide_for_failure(raw_msg)
+            if ev == "runner_on_ok" and task_name in _REAL_TASK_CUM and host:
+                entry = hd.setdefault(host, {})
+                if entry.get("status") != "실패":
+                    entry["status"] = "진행중"
+                entry["task"] = task_name
+                entry["step_index"] = _REAL_TASK_INDEX[task_name]
+                entry["step_total"] = REAL_TASK_TOTAL_STEPS
+                entry["pct"] = _REAL_TASK_CUM[task_name]
             # "결과 JSON 회수" 태스크가 성공하면 그 호스트는 사실상 끝난 것으로 본다.
-            if event.get("event") == "runner_on_ok" and task_name.startswith("결과 JSON 회수"):
+            if ev == "runner_on_ok" and task_name.startswith("결과 JSON 회수") and host:
+                entry = hd.setdefault(host, {})
+                entry["status"] = "완료"
+                entry["pct"] = 100
                 with app.app_context():
                     r = db.session.get(ScanRun, run_id)
                     r.completed = (r.completed or 0) + 1
                     db.session.commit()
 
-        result = ansible_runner.run(
-            private_data_dir=ANSIBLE_DIR,
-            playbook=PLAYBOOK_RELATIVE_PATH,
-            inventory=inventory_path,
-            limit=",".join(hostnames),
-            extravars={"target_hosts": ",".join(hostnames)},
-            event_handler=on_event,
-            # 웹에서 "진단 중지"를 누르면 이 콜백이 True를 반환해서 ansible-runner가
-            # 실행 중인 ansible-playbook 프로세스를 죽이고 빠져나온다.
-            cancel_callback=lambda: run_id in _CANCEL_REQUESTED,
-            quiet=True,
-        )
+        # 점검 스크립트 실행 단계(전체의 55%)는 ansible 입장에서 하나의 shell
+        # 태스크라 항목 단위 진행을 알 수 없다. 서버마다 별도 SSH로 옆에서
+        # run_all.progress를 들여다보는 폴러를 하나씩 띄워서 세분화한다.
+        pollers = []
+        poll_stop = threading.Event()
+        for s in servers:
+            th = threading.Thread(
+                target=_poll_item_progress, args=(run_id, s, hostnames, poll_stop), daemon=True
+            )
+            th.start()
+            pollers.append(th)
+
+        try:
+            result = ansible_runner.run(
+                private_data_dir=ANSIBLE_DIR,
+                playbook=PLAYBOOK_RELATIVE_PATH,
+                inventory=inventory_path,
+                limit=",".join(hostnames),
+                extravars={"target_hosts": ",".join(hostnames)},
+                event_handler=on_event,
+                # 웹에서 "진단 중지"를 누르면 이 콜백이 True를 반환해서 ansible-runner가
+                # 실행 중인 ansible-playbook 프로세스를 죽이고 빠져나온다.
+                cancel_callback=lambda: run_id in _CANCEL_REQUESTED,
+                quiet=True,
+                # 릴레이 경유 등으로 SSH 연결이 일시적으로 튕겨도 태스크 단위로
+                # 자동 재시도하도록 (기존엔 1회 실패=전체 실패였다).
+                envvars={"ANSIBLE_SSH_RETRIES": "3", "ANSIBLE_TIMEOUT": "30"},
+            )
+        finally:
+            poll_stop.set()
 
         cancelled = run_id in _CANCEL_REQUESTED
         all_warnings = []
@@ -363,27 +483,44 @@ def status(run_id):
     run = ScanRun.query.get_or_404(run_id)
     server_ids = run.server_id_list()
     servers = Server.query.filter(Server.id.in_(server_ids)).all()
+    hostnames = [s.hostname for s in servers]
     prog = _SCAN_PROGRESS.get(run_id, {})
-    percent = prog.get("percent")
-    if percent is None and run.total:
-        # 시뮬레이션 모드: 서버 완료 수만으로는 서버 1대짜리 실행이 끝날 때까지
-        # 0%에 멈춰 보이니, 지금 서버 안에서 진행 중인 카테고리 비율도 더해준다.
-        server_frac = (run.completed or 0) / run.total
-        within_frac = 0
-        if prog.get("item_total"):
-            within_frac = (prog.get("item_done", 0) / prog["item_total"]) / run.total
-        percent = round((server_frac + within_frac) * 100, 1)
+    host_detail_raw = prog.get("host_detail", {})
+    # run이 끝나면 _SCAN_PROGRESS[run_id]가 정리(pop)되는데, 그 직후에 상태를 조회하면
+    # host_detail_raw가 비어서 완료된 서버까지 "대기"로 잘못 보이는 레이스가 있었다.
+    # run.status가 이미 종료 상태면 기록이 없는 서버는 그 결과를 그대로 물려받게 한다.
+    fallback_status = {"completed": "완료", "failed": "실패", "cancelled": "대기"}.get(run.status, "대기")
+
+    # 서버마다 독립된 진행 정보를 그대로 배열로 내려준다 - 프론트가 서버별로
+    # 각자의 줄(레인)을 그릴 수 있게. (예전엔 "지금 보고 있는 서버 하나"만 있었음)
+    hosts_detail = []
+    pct_sum = 0
+    for h in hostnames:
+        d = host_detail_raw.get(h) or {"status": fallback_status}
+        status_label = d.get("status", "대기")
+        step_total = d.get("step_total") or 0
+        step_index = d.get("step_index") or 0
+        if status_label == "완료":
+            pct = 100.0
+        elif "pct" in d:
+            pct = d["pct"]
+        elif step_total:
+            pct = round((step_index / step_total) * 100, 1)
+        else:
+            pct = 0.0
+        pct_sum += pct
+        hosts_detail.append(dict(
+            hostname=h, status=status_label, task=d.get("task") or d.get("category"),
+            step_index=step_index, step_total=step_total,
+            item_done=d.get("item_done", 0), item_total=d.get("item_total", 0),
+            percent=round(pct, 1), reason=d.get("reason"),
+        ))
+    percent = round(pct_sum / len(hostnames), 1) if hostnames else 0.0
     if run.status == "completed":
-        percent = 100
+        percent = 100.0
+
     return jsonify(dict(
         id=run.id, status=run.status, total=run.total, completed=run.completed,
-        servers=[s.hostname for s in servers],
-        percent=percent,
-        current_server=prog.get("server") or prog.get("current_server"),
-        category=prog.get("category") or prog.get("task"),
-        cat_index=prog.get("cat_index", 0),
-        cat_total=prog.get("cat_total", 0),
-        item_done=prog.get("item_done", 0),
-        item_total=prog.get("item_total", 0),
+        servers=hostnames, percent=percent, hosts_detail=hosts_detail,
         fail_reason=run.fail_reason,
     ))
