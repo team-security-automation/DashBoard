@@ -16,13 +16,24 @@
       </div>
       <div class="field">
         <label>OS</label>
-        <input type="text" name="os_family" placeholder="Rocky Linux / Ubuntu"
-               value="{{ server.os_family if server else '' }}" required>
+        <div class="radio-group" id="osFamilyGroup">
+          {% for fam in ['Rocky Linux', 'Ubuntu'] %}
+          <label class="radio-opt">
+            <input type="radio" name="os_family" value="{{ fam }}"
+                   {{ 'checked' if (server and server.os_family == fam) or (not server and loop.first) else '' }}>
+            {{ fam }}
+          </label>
+          {% endfor %}
+        </div>
       </div>
       <div class="field">
         <label>OS 버전</label>
-        <input type="text" name="os_version" placeholder="9 / 24.04"
-               value="{{ server.os_version if server else '' }}" required>
+        <select name="os_version" id="osVersionSelect" required>
+          <option value="9" data-os="Rocky Linux" {{ 'selected' if server and server.os_version == '9' else '' }}>9</option>
+          <option value="10" data-os="Rocky Linux" {{ 'selected' if server and server.os_version == '10' else '' }}>10</option>
+          <option value="24.04" data-os="Ubuntu" {{ 'selected' if server and server.os_version == '24.04' else '' }}>24.04</option>
+          <option value="26.04" data-os="Ubuntu" {{ 'selected' if server and server.os_version == '26.04' else '' }}>26.04</option>
+        </select>
       </div>
       <div class="field">
         <label>서버 역할</label>
@@ -87,4 +98,31 @@
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const familyRadios = document.querySelectorAll('#osFamilyGroup input[name="os_family"]');
+    const versionSelect = document.getElementById('osVersionSelect');
+    const versionOptions = Array.from(versionSelect.options);
+
+    function syncVersions() {
+      const checked = document.querySelector('#osFamilyGroup input[name="os_family"]:checked');
+      const family = checked ? checked.value : null;
+      let hasSelected = false;
+      versionOptions.forEach((opt) => {
+        const match = opt.dataset.os === family;
+        opt.hidden = !match;
+        if (match && !hasSelected && opt.selected) hasSelected = true;
+      });
+      if (!hasSelected) {
+        const firstMatch = versionOptions.find((opt) => opt.dataset.os === family);
+        if (firstMatch) firstMatch.selected = true;
+      }
+    }
+    familyRadios.forEach((r) => r.addEventListener('change', syncVersions));
+    syncVersions();
+  })();
+</script>
 {% endblock %}
