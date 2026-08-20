@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 {% block title %}이력 관리{% endblock %}
 {% block page_title %}이력 관리{% endblock %}
-{% block page_sub %}<p class="page-sub">보안점수 시계열 추세 및 조치 이력</p>{% endblock %}
 
 {% block content %}
 <section class="grid-2">
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title">
       <span>{{ title }} 추세</span>
       <form method="get" class="inline-form">
@@ -20,7 +19,7 @@
     <canvas id="historyChart" height="220"></canvas>
   </div>
 
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title"><span>서버별 최신 점수 비교</span></div>
     {% for c in compare %}
     <div class="compliance-row">
@@ -35,7 +34,7 @@
   </div>
 </section>
 
-<section class="panel">
+<section class="panel reveal">
   <div class="panel-title"><span>조치 이력</span></div>
   {% if action_history %}
   <table class="data data-compact">

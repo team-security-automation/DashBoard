@@ -11,12 +11,12 @@
 
 {% block content %}
 <section class="detail-head">
-  <div class="panel score-panel">
+  <div class="panel score-panel reveal">
     <div class="kpi-label">보안 수준</div>
     <div class="kpi-value kpi-value-lg">{{ level }}<small>/100</small></div>
     <span class="pill pill-{{ color }}">{{ grade }}</span>
   </div>
-  <div class="panel meta-panel">
+  <div class="panel meta-panel reveal">
     <div class="meta-grid">
       <div><span class="meta-label">역할</span><span>{{ server.role_desc or '-' }}</span></div>
       <div><span class="meta-label">업무팀</span><span>{{ server.business_team or '-' }}</span></div>
@@ -54,53 +54,77 @@
     <a class="btn btn-ghost btn-sm" href="{{ url_for('servers.server_detail', server_id=server.id) }}">초기화</a>
   </form>
 
-  <table class="data data-compact">
-    <thead>
-      <tr>
-        <th>코드</th><th>카테고리</th><th>점검항목</th><th>위험도</th><th>배점</th>
-        <th>진단결과</th><th>현재설정 / 조치권고</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in rows %}
-      {% set ci = r.check_item %}
-      <tr id="item-{{ ci.code }}" class="{{ 'row-flagged' if f_q and f_q.upper() == ci.code else '' }}">
-        <td class="mono">{{ ci.code }}</td>
-        <td>{{ ci.category }}</td>
-        <td>{{ ci.name }}</td>
-        <td><span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL.get(ci.risk_level, ci.risk_level) }}</span></td>
-        <td class="mono">{{ ci.weight }}</td>
-        <td>
-          {% if r.result == '취약' %}<span class="pill pill-vuln">취약</span>
-          {% elif r.result == '수동확인' %}<span class="pill pill-manual">수동 조치 필요</span>
-          {% elif r.result == 'N/A' %}<span class="pill pill-warn">N/A</span>
-          {% else %}<span class="pill pill-good">양호</span>{% endif %}
-        </td>
-        <td class="detail-text">
-          {% if r.result in ('취약', '수동확인') %}
-            <div class="detail-current">{{ r.current_setting }}</div>
-            <div class="detail-reco">→ {{ r.recommendation }}</div>
-          {% else %}
-            <span class="text-muted">-</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if r.result in ('취약', '수동확인') and current_user.role == 'admin' %}
-            {% if ci.id in pending_map %}
-              <a class="btn btn-ghost btn-xs" href="{{ url_for('approvals.detail', req_id=pending_map[ci.id]) }}">승인대기중</a>
-            {% else %}
-              <form method="post" action="{{ url_for('approvals.create') }}">
-                <input type="hidden" name="server_id" value="{{ server.id }}">
-                <input type="hidden" name="check_item_id" value="{{ ci.id }}">
-                <button class="btn btn-approve btn-xs" type="submit">조치 승인 요청</button>
-              </form>
-            {% endif %}
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {% if groups %}
+  <div class="cat-accordion-list">
+    {% for g in groups %}
+    <details class="cat-accordion reveal" {{ 'open' if g.open else '' }}>
+      <summary>
+        <span class="cat-accordion-title">
+          <span class="cat-accordion-chevron"></span>
+          <span class="cat-accordion-name">{{ g.category }}</span>
+          <span class="cat-accordion-count">{{ g.rows|length }}개 항목</span>
+        </span>
+        <span class="cat-accordion-stats">
+          {% if g.stats.vuln %}<span class="pill pill-vuln pill-xs">취약 {{ g.stats.vuln }}</span>{% endif %}
+          {% if g.stats.manual %}<span class="pill pill-manual pill-xs">수동 {{ g.stats.manual }}</span>{% endif %}
+          {% if g.stats.na %}<span class="pill pill-warn pill-xs">N/A {{ g.stats.na }}</span>{% endif %}
+          {% if g.stats.good %}<span class="pill pill-good pill-xs">양호 {{ g.stats.good }}</span>{% endif %}
+        </span>
+      </summary>
+      <div class="cat-accordion-body">
+        <table class="data data-compact">
+          <thead>
+            <tr>
+              <th>코드</th><th>점검항목</th><th>위험도</th><th>배점</th>
+              <th>진단결과</th><th>현재설정 / 조치권고</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in g.rows %}
+            {% set ci = r.check_item %}
+            <tr id="item-{{ ci.code }}" class="{{ 'row-flagged' if f_q and f_q.upper() == ci.code else '' }}">
+              <td class="mono">{{ ci.code }}</td>
+              <td>{{ ci.name }}</td>
+              <td><span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL.get(ci.risk_level, ci.risk_level) }}</span></td>
+              <td class="mono">{{ ci.weight }}</td>
+              <td>
+                {% if r.result == '취약' %}<span class="pill pill-vuln">취약</span>
+                {% elif r.result == '수동확인' %}<span class="pill pill-manual">수동 조치 필요</span>
+                {% elif r.result == 'N/A' %}<span class="pill pill-warn">N/A</span>
+                {% else %}<span class="pill pill-good">양호</span>{% endif %}
+              </td>
+              <td class="detail-text">
+                {% if r.result in ('취약', '수동확인') %}
+                  <div class="detail-current">{{ r.current_setting }}</div>
+                  <div class="detail-reco">→ {{ r.recommendation }}</div>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if r.result in ('취약', '수동확인') and current_user.role == 'admin' %}
+                  {% if ci.id in pending_map %}
+                    <a class="btn btn-ghost btn-xs" href="{{ url_for('approvals.detail', req_id=pending_map[ci.id]) }}">승인대기중</a>
+                  {% else %}
+                    <form method="post" action="{{ url_for('approvals.create') }}">
+                      <input type="hidden" name="server_id" value="{{ server.id }}">
+                      <input type="hidden" name="check_item_id" value="{{ ci.id }}">
+                      <button class="btn btn-approve btn-xs" type="submit">조치 승인 요청</button>
+                    </form>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty-note">조건에 맞는 점검 항목이 없습니다.</p>
+  {% endif %}
 </section>
 {% endblock %}
 

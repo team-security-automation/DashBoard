@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}조치 승인{% endblock %}
 {% block page_title %}조치 승인{% endblock %}
-{% block page_sub %}<p class="page-sub">미리보기(dry-run) → 실무자 승인 요청 → 승인자 승인/거부 → 자동 재진단 → 전후비교</p>{% endblock %}
 
 {% block content %}
 <section class="tab-bar">
@@ -11,7 +10,7 @@
   <a class="tab {{ 'active' if status == 'all' }}" href="{{ url_for('approvals.list_approvals', status='all') }}">전체 <span>{{ counts.all }}</span></a>
 </section>
 
-<div class="panel">
+<div class="panel reveal">
   {% if reqs %}
   <table class="data">
     <thead>

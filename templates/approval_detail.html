@@ -5,7 +5,7 @@
 
 {% block content %}
 <section class="grid-2">
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title"><span>변경 미리보기 (Dry-run)</span>
       <span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL[ci.risk_level] }} 위험</span>
       {% if ar.remediation_type == 'manual' %}
@@ -40,8 +40,8 @@
           </button>
           {% else %}
           <button type="submit" class="btn btn-approve"
-                  onclick="return confirm('승인하면 백업 → 조치 실행 → 자동 재진단까지 즉시 진행됩니다. 계속할까요?');">
-            승인 (백업 → 조치 → 재진단)
+                  onclick="return confirm('승인하면 백업 후 조치가 실행되고 자동으로 재진단까지 진행됩니다. 계속할까요?');">
+            승인 (자동 조치 진행)
           </button>
           {% endif %}
         </form>
@@ -56,7 +56,7 @@
       {% endif %}
     {% elif ar.status == 'approved' and ar.remediation_type == 'manual' and not ar.executed_at %}
       <div class="result-box result-warn">
-        <strong>승인 완료 — 수동 조치 대기중</strong> — {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <strong>승인 완료 · 수동 조치 대기중</strong> · {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
         아래 가이드에 따라 실무자가 직접 조치한 뒤 완료 처리하세요. 완료 처리 전까지는 재진단·점수 반영이 되지 않습니다.
       </div>
       {% if current_user.can_run_diagnosis() %}
@@ -71,19 +71,19 @@
       {% endif %}
     {% elif ar.status == 'approved' %}
       <div class="result-box result-good">
-        <strong>승인 완료</strong> — {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <strong>승인 완료</strong> · {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
         백업: <span class="mono">{{ ar.backup_path }}</span><br>
         실행: {{ ar.executed_at.strftime('%Y-%m-%d %H:%M') if ar.executed_at else '-' }}
       </div>
     {% else %}
       <div class="result-box result-bad">
-        <strong>거부됨</strong> — {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <strong>거부됨</strong> · {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
         사유: {{ ar.reject_reason }}
       </div>
     {% endif %}
   </div>
 
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title"><span>전후 비교</span></div>
     {% if ar.executed_at %}
     <div class="before-after">

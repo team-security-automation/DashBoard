@@ -1,22 +1,15 @@
 {% extends "base.html" %}
 {% block title %}진단 실행{% endblock %}
 {% block page_title %}진단 실행{% endblock %}
-{% block page_sub %}<p class="page-sub">Ansible 병렬 진단(forks=5) — IP 확인 → SSH 병렬 실행 → JSON 결과 회수 → DB 적재</p>{% endblock %}
 
 {% block content %}
-{% if use_real_ansible %}
-  <div class="flash flash-success" style="margin:0">실제 모드 — 진단 실행 시 대상 서버에 실제로 SSH 접속합니다 (USE_REAL_ANSIBLE=true).</div>
-{% else %}
-  <div class="flash flash-warning" style="margin:0">시뮬레이션 모드 — 실제 SSH 접속 없이 직전 결과를 재적재합니다.
-    config.py의 USE_REAL_ANSIBLE을 켜면 실제 진단으로 전환됩니다.</div>
-{% endif %}
 {% if missing_ssh %}
-  <div class="flash flash-danger">SSH 키 경로가 설정되지 않은 서버: {{ missing_ssh|map(attribute='hostname')|join(', ') }}
-    — 실제 모드에서는 이 서버들이 인벤토리에서 제외되어 진단되지 않습니다. 서버 수정 화면에서 설정하세요.</div>
+  <div class="flash flash-danger">SSH 키 경로가 설정되지 않은 서버가 있습니다: {{ missing_ssh|map(attribute='hostname')|join(', ') }}.
+    실제 모드에서는 해당 서버가 진단 대상에서 제외되니, 서버 수정 화면에서 먼저 설정해주세요.</div>
 {% endif %}
 
 <section class="grid-2">
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title"><span>서버 선택 후 진단 실행</span></div>
 
     {% if not current_user.can_run_diagnosis() %}
@@ -49,6 +42,12 @@
           진단 실행
         </button>
       </div>
+      <div class="form-actions" style="border-top:none; margin-top:8px; padding-top:0; justify-content:flex-end">
+        <span class="mode-caption {{ 'mode-live' if use_real_ansible else '' }}">
+          <span class="mode-dot"></span>
+          {{ '실제 서버에 접속해 진단합니다' if use_real_ansible else '시뮬레이션 모드 · 직전 결과를 재사용합니다' }}
+        </span>
+      </div>
     </form>
 
     <div class="progress-box" id="progressBox" style="display:none">
@@ -61,7 +60,7 @@
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title"><span>실행 이력</span></div>
     <table class="data data-compact">
       <thead><tr><th>시작 시각</th><th>대상</th><th>소요</th><th>상태</th><th>실행자</th></tr></thead>

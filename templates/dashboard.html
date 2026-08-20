@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}대시보드{% endblock %}
 {% block page_title %}대시보드{% endblock %}
-{% block page_sub %}<p class="page-sub">전체 {{ server_count }}대 서버 · 마지막 진단 기준 현황</p>{% endblock %}
 
 {% block topbar_actions %}
 <a class="btn btn-ghost btn-sm" href="{{ url_for('reports.excel_report', server_id='all') }}">Excel 다운로드</a>
@@ -12,12 +11,12 @@
 {% block content %}
 
 <section class="kpi-row">
-  <div class="kpi-card">
+  <div class="kpi-card kpi-card-primary reveal">
     <div class="kpi-label">전체 평균 보안점수</div>
     <div class="kpi-value">{{ avg_score }}<small>/100</small></div>
     <span class="pill pill-{{ avg_color }}">{{ avg_grade }}</span>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card reveal">
     <div class="kpi-label">주간 변화 (7일)</div>
     {% if week_delta is not none %}
       <div class="kpi-value kpi-delta {{ 'up' if week_delta >= 0 else 'down' }}">
@@ -29,26 +28,26 @@
       <span class="kpi-sub">데이터 누적 중</span>
     {% endif %}
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card reveal">
     <div class="kpi-label">진단 대상 서버</div>
     <div class="kpi-value">{{ server_count }}<small>대</small></div>
     <span class="kpi-sub">Rocky 2 · Ubuntu 2 · 웹/DB 1</span>
   </div>
-  <div class="kpi-card kpi-card-alert">
+  <div class="kpi-card kpi-card-alert reveal">
     <div class="kpi-label">미조치 Critical(상) 항목</div>
     <div class="kpi-value">{{ critical_open }}<small>건</small></div>
     <span class="kpi-sub">위험도 상(H) · 전체 서버 합산</span>
   </div>
-  <div class="kpi-card">
+  <div class="kpi-card reveal">
     <div class="kpi-label">승인 대기</div>
     <div class="kpi-value">{{ pending_approvals }}<small>건</small></div>
-    <a class="kpi-link" href="{{ url_for('approvals.list_approvals') }}">승인함 바로가기 →</a>
+    <a class="kpi-link" href="{{ url_for('approvals.list_approvals') }}">승인함 바로가기 ›</a>
   </div>
 </section>
 
 <section class="server-strip">
   {% for row in server_scores %}
-  <a class="server-chip" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">
+  <a class="server-chip reveal" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">
     <div class="server-chip-top">
       <span class="mono">{{ row.server.hostname }}</span>
       <span class="pill pill-{{ row.color }} pill-xs">{{ row.grade }}</span>
@@ -60,10 +59,9 @@
   {% endfor %}
 </section>
 
-<section class="panel heatmap-wrap">
+<section class="panel heatmap-wrap reveal">
   <div class="panel-title">
     <span>서버 × 점검항목 히트맵</span>
-    <span class="panel-title-sub">셀을 클릭하면 상세 진단 결과로 이동합니다</span>
   </div>
   <div class="heatmap-legend">
     <span><i class="legend-dot legend-good"></i>양호</span>
@@ -110,10 +108,9 @@
 </section>
 
 <section class="grid-2">
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title">
       <span>위험도 기반 조치 우선순위</span>
-      <span class="panel-title-sub">배점 × 영향받는 서버 수</span>
     </div>
     {% if priority_queue %}
     <div class="priority-list">
@@ -137,10 +134,9 @@
     {% endif %}
   </div>
 
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title">
       <span>카테고리별 컴플라이언스 준수율</span>
-      <span class="panel-title-sub">전체 서버 합산</span>
     </div>
     {% for c in category_chart %}
     <div class="compliance-row">
@@ -156,17 +152,15 @@
 </section>
 
 <section class="grid-2">
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title">
       <span>카테고리별 위험 분포</span>
-      <span class="panel-title-sub">취약 건수(전체 서버 합산)</span>
     </div>
     <canvas id="categoryChart" height="220"></canvas>
   </div>
-  <div class="panel">
+  <div class="panel reveal">
     <div class="panel-title">
       <span>전체 평균 보안점수 추세</span>
-      <span class="panel-title-sub">최근 14일</span>
     </div>
     <canvas id="trendChart" height="220"></canvas>
   </div>

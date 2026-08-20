@@ -77,7 +77,7 @@
       <div class="field field-checkbox">
         <label>
           <input type="checkbox" name="ssh_become" {{ 'checked' if (server is none) or (server and server.ssh_become) else '' }}>
-          sudo 권한으로 실행 (become: yes) — 대부분의 점검 스크립트에 필요
+          sudo 권한으로 실행 (become: yes, 대부분의 점검 스크립트에 필요)
         </label>
       </div>
     </div>

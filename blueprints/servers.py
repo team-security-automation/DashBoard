@@ -168,6 +168,27 @@ def server_detail(server_id):
 
     categories = sorted({r.check_item.category for r in results})
 
+    # 카테고리별 아코디언 그룹 + 통계 (필터링된 rows 기준, 전체 카테고리 순서 유지)
+    groups = []
+    for cat in categories:
+        cat_rows = [r for r in rows if r.check_item.category == cat]
+        if not cat_rows:
+            continue
+        stats = {"vuln": 0, "manual": 0, "na": 0, "good": 0}
+        for r in cat_rows:
+            if r.result == "취약":
+                stats["vuln"] += 1
+            elif r.result == "수동확인":
+                stats["manual"] += 1
+            elif r.result == "N/A":
+                stats["na"] += 1
+            else:
+                stats["good"] += 1
+        needs_attention = stats["vuln"] > 0 or stats["manual"] > 0
+        force_open = bool(q or category)
+        groups.append(dict(category=cat, rows=cat_rows, stats=stats,
+                            open=force_open or needs_attention))
+
     pending = (ApprovalRequest.query
                .filter_by(server_id=server_id, status="pending").all())
     pending_map = {p.check_item_id: p.id for p in pending}
@@ -175,7 +196,7 @@ def server_detail(server_id):
     return render_template(
         "server_detail.html",
         server=srv, level=level, grade=grade, color=GRADE_COLOR.get(grade, "warn"),
-        rows=rows, categories=categories,
+        rows=rows, categories=categories, groups=groups,
         f_category=category, f_risk=risk, f_result=result_filter, f_q=q,
         RISK_LABEL=RISK_LABEL, pending_map=pending_map,
     )
