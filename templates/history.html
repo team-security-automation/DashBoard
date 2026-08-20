@@ -37,9 +37,10 @@
 <section class="panel reveal">
   <div class="panel-title"><span>조치 이력</span></div>
   {% if action_history %}
+  <div class="table-scroll">
   <table class="data data-compact">
     <thead>
-      <tr><th>수행일시</th><th>서버</th><th>항목</th><th>이전</th><th>→</th><th>이후</th><th>수행자</th><th>백업</th></tr>
+      <tr><th>수행일시</th><th>서버</th><th>항목</th><th>이전</th><th>이후</th><th>수행자</th><th>백업</th></tr>
     </thead>
     <tbody>
       {% for h in action_history %}
@@ -48,7 +49,6 @@
         <td class="mono">{{ h.server.hostname }}</td>
         <td><span class="mono">{{ h.check_item.code }}</span> {{ h.check_item.name }}</td>
         <td><span class="pill pill-vuln pill-xs">취약</span> <span class="mono">{{ h.before_score }}</span></td>
-        <td>→</td>
         <td><span class="pill pill-good pill-xs">양호</span> <span class="mono">{{ h.after_score }}</span></td>
         <td>{{ h.performed_by }}</td>
         <td class="mono text-muted">{{ h.backup_path }}</td>
@@ -56,6 +56,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
   <p class="empty-note">아직 실행된 조치 이력이 없습니다.</p>
   {% endif %}

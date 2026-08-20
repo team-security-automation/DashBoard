@@ -106,34 +106,37 @@ def index():
     priority_queue.sort(key=lambda x: (-x["impact"], -x["item"].weight))
     priority_queue = priority_queue[:10]
 
-    # --- 히트맵 매트릭스 (서버 x 점검항목) ---------------------------------
+    # --- 히트맵 (서버별 카드, 카테고리별로 뚜렷하게 나뉜 칩 목록) ----------------
+    # 서버마다 카드 하나, 그 안에 카테고리 아코디언(server_detail과 동일 컴포넌트
+    # 재사용)을 두고, 칩 안에 점검항목 코드를 직접 적어 옆에 라벨을 따로 안 둔다.
+    def _cell_status(ci, srv):
+        r = per_server[srv.id].get(ci.id)
+        if r is None or r.result == "N/A":
+            return dict(status="na", label="N/A")
+        if r.result == "취약":
+            return dict(status="vuln", label="취약")
+        if r.result == "수동확인":
+            return dict(status="manual", label="수동 조치 필요")
+        return dict(status="good", label="양호")
+
     heatmap_categories = OrderedDict()
     for ci in items:
         heatmap_categories.setdefault(ci.category, []).append(ci)
 
-    heatmap_rows = []
+    score_by_server = {s["server"].id: s for s in server_scores}
+    heatmap_server_blocks = []
     for srv in servers:
-        cells = []
-        for ci in items:
-            r = per_server[srv.id].get(ci.id)
-            if r is None:
-                status = "na"
-                label = "N/A"
-            elif r.result == "취약":
-                status = "vuln"
-                label = "취약"
-            elif r.result == "수동확인":
-                status = "manual"
-                label = "수동 조치 필요"
-            elif r.result == "N/A":
-                status = "na"
-                label = "N/A"
-            else:
-                status = "good"
-                label = "양호"
-            cells.append(dict(code=ci.code, name=ci.name, risk=ci.risk_level,
-                               status=status, label=label))
-        heatmap_rows.append(dict(server=srv, cells=cells))
+        sc = score_by_server[srv.id]
+        cat_blocks = []
+        for cat, cis in heatmap_categories.items():
+            cells = [dict(ci=ci, **_cell_status(ci, srv)) for ci in cis]
+            stats = dict(vuln=0, manual=0, na=0, good=0)
+            for cell in cells:
+                stats[cell["status"]] += 1
+            cat_blocks.append(dict(category=cat, cells=cells, stats=stats,
+                                    open=bool(stats["vuln"] or stats["manual"])))
+        heatmap_server_blocks.append(dict(server=srv, level=sc["level"], grade=sc["grade"],
+                                           color=sc["color"], categories=cat_blocks))
 
     return render_template(
         "dashboard.html",
@@ -149,7 +152,7 @@ def index():
         server_count=len(servers),
         category_chart=category_chart,
         priority_queue=priority_queue,
-        heatmap_categories=heatmap_categories,
-        heatmap_rows=heatmap_rows,
+        heatmap_servers=servers,
+        heatmap_server_blocks=heatmap_server_blocks,
         RISK_LABEL=RISK_LABEL,
     )

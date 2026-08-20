@@ -46,11 +46,15 @@ RISK_ORDER = {"H": 0, "M": 1, "L": 2}
 
 
 def _target_servers():
-    server_id = request.args.get("server_id", "all")
-    if server_id == "all":
+    ids = request.args.getlist("server_id")
+    if not ids or "all" in ids:
         return Server.query.order_by(Server.id).all(), "전체 서버"
-    srv = Server.query.get_or_404(int(server_id))
-    return [srv], srv.hostname
+    if len(ids) == 1:
+        srv = Server.query.get_or_404(int(ids[0]))
+        return [srv], srv.hostname
+    servers = Server.query.filter(Server.id.in_([int(i) for i in ids])).order_by(Server.id).all()
+    label = ", ".join(s.hostname for s in servers) if len(servers) <= 4 else f"선택 서버 {len(servers)}대"
+    return servers, label
 
 
 def _style_header(ws, row, headers, widths):

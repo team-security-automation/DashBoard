@@ -117,7 +117,7 @@ def _execute_remediation(ar, performed_by_suffix):
         approval_id=ar.id, server_id=srv.id, check_item_id=ci.id,
         before_result=before_result, after_result="양호",
         before_score=before_score, after_score=0.0,
-        performed_by=f"{ar.approver} 승인 → {performed_by_suffix}",
+        performed_by=f"{ar.approver} 승인 · {performed_by_suffix}",
         performed_at=datetime.utcnow(), backup_path=ar.backup_path,
     )
     db.session.add(hist)
@@ -167,7 +167,7 @@ def decide(req_id):
 
     level_before, level_after = _execute_remediation(ar, "자동 조치 실행")
     flash(f"승인 완료: 백업 후 조치를 실행하고 재진단했습니다. "
-          f"(서버 보안점수 {level_before} → {level_after})", "success")
+          f"서버 보안점수가 {level_before}점에서 {level_after}점으로 올랐습니다.", "success")
     return redirect(url_for("approvals.detail", req_id=req_id))
 
 
@@ -190,5 +190,5 @@ def complete_manual(req_id):
     level_before, level_after = _execute_remediation(
         ar, f"{current_user.display_name}({current_user.username}) 수동 조치 완료 처리"
     )
-    flash(f"수동 조치 완료 처리했습니다. (서버 보안점수 {level_before} → {level_after})", "success")
+    flash(f"수동 조치 완료 처리했습니다. 서버 보안점수가 {level_before}점에서 {level_after}점으로 올랐습니다.", "success")
     return redirect(url_for("approvals.detail", req_id=req_id))

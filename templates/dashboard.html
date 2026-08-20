@@ -3,8 +3,7 @@
 {% block page_title %}대시보드{% endblock %}
 
 {% block topbar_actions %}
-<a class="btn btn-ghost btn-sm" href="{{ url_for('reports.excel_report', server_id='all') }}">Excel 다운로드</a>
-<a class="btn btn-ghost btn-sm" href="{{ url_for('reports.pdf_report', server_id='all') }}">PDF 다운로드</a>
+<button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('downloadModal').classList.add('open')">보고서 다운로드</button>
 <a class="btn btn-primary btn-sm" href="{{ url_for('diagnosis.index') }}">진단 실행</a>
 {% endblock %}
 
@@ -31,12 +30,10 @@
   <div class="kpi-card reveal">
     <div class="kpi-label">진단 대상 서버</div>
     <div class="kpi-value">{{ server_count }}<small>대</small></div>
-    <span class="kpi-sub">Rocky 2 · Ubuntu 2 · 웹/DB 1</span>
   </div>
   <div class="kpi-card kpi-card-alert reveal">
-    <div class="kpi-label">미조치 Critical(상) 항목</div>
+    <div class="kpi-label">상급 미조치</div>
     <div class="kpi-value">{{ critical_open }}<small>건</small></div>
-    <span class="kpi-sub">위험도 상(H) · 전체 서버 합산</span>
   </div>
   <div class="kpi-card reveal">
     <div class="kpi-label">승인 대기</div>
@@ -71,39 +68,50 @@
     <span><i class="legend-dot legend-manual"></i>수동 조치 필요</span>
     <span><i class="legend-dot legend-na"></i>N/A</span>
   </div>
-  <div class="heatmap-scroll">
-    <table class="heatmap">
-      <thead>
-        <tr>
-          <th class="server-col corner"></th>
-          {% for cat, cis in heatmap_categories.items() %}
-            <th class="cat-head" colspan="{{ cis|length }}">{{ cat }}</th>
-          {% endfor %}
-        </tr>
-        <tr>
-          <th class="server-col corner"></th>
-          {% for cat, cis in heatmap_categories.items() %}
-            {% for ci in cis %}
-              <th class="code-head" title="{{ ci.code }} · {{ ci.name }}"><span>{{ ci.code }}</span></th>
-            {% endfor %}
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in heatmap_rows %}
-        <tr>
-          <th class="server-col">{{ row.server.hostname }}</th>
-          {% for cell in row.cells %}
-            <td>
-              <a class="hm-cell {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else ('manual' if cell.status=='manual' else 'vuln-' ~ cell.risk)) }}"
-                 href="{{ url_for('servers.server_detail', server_id=row.server.id, q=cell.code) }}"
-                 title="{{ row.server.hostname }} · {{ cell.code }} {{ cell.name }} ({{ RISK_LABEL.get(cell.risk, cell.risk) }}) · {{ cell.label }}"></a>
-            </td>
-          {% endfor %}
-        </tr>
+  <div class="heatmap-toggle" id="heatmapToggle">
+    <button type="button" class="hm-toggle-pill active" data-server="all">전체</button>
+    {% for srv in heatmap_servers %}
+    <button type="button" class="hm-toggle-pill" data-server="{{ srv.id }}">{{ srv.hostname }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="hm-server-list">
+    {% for block in heatmap_server_blocks %}
+    <div class="hm-server-card" data-server-id="{{ block.server.id }}">
+      <div class="hm-server-head">
+        <span class="mono">{{ block.server.hostname }}</span>
+        <span class="pill pill-{{ block.color }} pill-xs">{{ block.grade }} · {{ block.level }}점</span>
+      </div>
+      <div class="cat-accordion-list">
+        {% for cat in block.categories %}
+        <details class="cat-accordion" {{ 'open' if cat.open else '' }}>
+          <summary>
+            <span class="cat-accordion-title">
+              <span class="cat-accordion-chevron"></span>
+              <span class="cat-accordion-name">{{ cat.category }}</span>
+              <span class="cat-accordion-count">{{ cat.cells|length }}개</span>
+            </span>
+            <span class="cat-accordion-stats">
+              {% if cat.stats.vuln %}<span class="pill pill-vuln pill-xs">취약 {{ cat.stats.vuln }}</span>{% endif %}
+              {% if cat.stats.manual %}<span class="pill pill-manual pill-xs">수동 {{ cat.stats.manual }}</span>{% endif %}
+              {% if cat.stats.na %}<span class="pill pill-warn pill-xs">N/A {{ cat.stats.na }}</span>{% endif %}
+              {% if cat.stats.good %}<span class="pill pill-good pill-xs">양호 {{ cat.stats.good }}</span>{% endif %}
+            </span>
+          </summary>
+          <div class="cat-accordion-body">
+            <div class="hm-chip-wrap">
+              {% for cell in cat.cells %}
+              <a class="hm-chip {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else ('manual' if cell.status=='manual' else 'vuln-' ~ cell.ci.risk_level)) }}"
+                 href="{{ url_for('servers.server_detail', server_id=block.server.id, q=cell.ci.code) }}"
+                 title="{{ cell.ci.code }} {{ cell.ci.name }} ({{ RISK_LABEL.get(cell.ci.risk_level, cell.ci.risk_level) }}) · {{ cell.label }}">{{ cell.ci.code }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </div>
+    {% endfor %}
   </div>
 </section>
 
@@ -166,6 +174,36 @@
   </div>
 </section>
 
+<div class="modal-overlay" id="downloadModal">
+  <div class="modal">
+    <h3>보고서 다운로드</h3>
+    <p class="modal-desc">Excel 또는 PDF로 받을 대상을 선택하세요.</p>
+    <form method="get" id="downloadForm">
+      <div class="dl-scope">
+        <label class="dl-scope-opt">
+          <input type="radio" name="dl_scope" value="all" checked> 전체 서버 ({{ heatmap_servers|length }}대)
+        </label>
+        <label class="dl-scope-opt">
+          <input type="radio" name="dl_scope" value="pick"> 서버 선택
+        </label>
+      </div>
+      <div class="dl-server-list" id="dlServerList">
+        {% for srv in heatmap_servers %}
+        <label class="dl-server-item">
+          <input type="checkbox" name="server_id" value="{{ srv.id }}" disabled>
+          <span class="mono">{{ srv.hostname }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('downloadModal').classList.remove('open')">취소</button>
+        <button type="submit" class="btn btn-ghost" formaction="{{ url_for('reports.excel_report') }}" formtarget="_blank">Excel</button>
+        <button type="submit" class="btn btn-primary" formaction="{{ url_for('reports.pdf_report') }}" formtarget="_blank">PDF</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -176,4 +214,44 @@
   const trendValues = {{ trend_values | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+  (function () {
+    const toggle = document.getElementById('heatmapToggle');
+    if (!toggle) return;
+    const serverIds = Array.from(toggle.querySelectorAll('.hm-toggle-pill[data-server]'))
+      .map((b) => b.dataset.server).filter((id) => id !== 'all');
+    toggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('.hm-toggle-pill');
+      if (!btn) return;
+      toggle.querySelectorAll('.hm-toggle-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const sel = btn.dataset.server;
+      serverIds.forEach((id) => {
+        const show = sel === 'all' || sel === id;
+        const card = document.querySelector('.hm-server-card[data-server-id="' + id + '"]');
+        if (card) card.style.display = show ? '' : 'none';
+      });
+    });
+  })();
+</script>
+<script>
+  (function () {
+    const modal = document.getElementById('downloadModal');
+    if (!modal) return;
+    const scopeRadios = modal.querySelectorAll('input[name="dl_scope"]');
+    const checks = modal.querySelectorAll('#dlServerList input[type=checkbox]');
+    function sync() {
+      const pick = modal.querySelector('input[name="dl_scope"]:checked').value === 'pick';
+      checks.forEach((c) => { c.disabled = !pick; if (!pick) c.checked = false; });
+    }
+    scopeRadios.forEach((r) => r.addEventListener('change', sync));
+    document.getElementById('downloadForm').addEventListener('submit', (e) => {
+      const pick = modal.querySelector('input[name="dl_scope"]:checked').value === 'pick';
+      if (pick && ![...checks].some((c) => c.checked)) {
+        e.preventDefault();
+        alert('다운로드할 서버를 하나 이상 선택하세요.');
+      }
+    });
+  })();
+</script>
 {% endblock %}

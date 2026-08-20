@@ -72,6 +72,7 @@
         </span>
       </summary>
       <div class="cat-accordion-body">
+        <div class="table-scroll">
         <table class="data data-compact">
           <thead>
             <tr>
@@ -96,7 +97,7 @@
               <td class="detail-text">
                 {% if r.result in ('취약', '수동확인') %}
                   <div class="detail-current">{{ r.current_setting }}</div>
-                  <div class="detail-reco">→ {{ r.recommendation }}</div>
+                  <div class="detail-reco">{{ r.recommendation }}</div>
                 {% else %}
                   <span class="text-muted">-</span>
                 {% endif %}
@@ -118,6 +119,7 @@
             {% endfor %}
           </tbody>
         </table>
+        </div>
       </div>
     </details>
     {% endfor %}

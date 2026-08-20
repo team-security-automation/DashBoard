@@ -26,6 +26,7 @@ def create_app(config_class=Config):
     from blueprints.approvals import approvals_bp
     from blueprints.history import history_bp
     from blueprints.reports import reports_bp
+    from blueprints.review import review_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -34,6 +35,7 @@ def create_app(config_class=Config):
     app.register_blueprint(approvals_bp)
     app.register_blueprint(history_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(review_bp)
 
     # 템플릿에서 사용할 전역값
     from models import RISK_LABEL
@@ -41,10 +43,14 @@ def create_app(config_class=Config):
     @app.context_processor
     def inject_globals():
         pending_count = 0
+        manual_review_count = 0
         if getattr(current_user, "is_authenticated", False):
             from models import ApprovalRequest
+            from blueprints.review import pending_manual_count
             pending_count = ApprovalRequest.query.filter_by(status="pending").count()
-        return dict(RISK_LABEL=RISK_LABEL, pending_count=pending_count)
+            manual_review_count = pending_manual_count()
+        return dict(RISK_LABEL=RISK_LABEL, pending_count=pending_count,
+                    manual_review_count=manual_review_count)
 
     with app.app_context():
         db_path = app.config["SQLALCHEMY_DATABASE_URI"]

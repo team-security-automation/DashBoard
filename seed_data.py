@@ -38,6 +38,20 @@ REMEDIATED = {
     "rocky02": [("U-11", "실무자 su 대상자 sudoers 그룹 재정비 완료")],
 }
 
+# 스크립트가 양호/취약을 자동으로 판정하지 못해 실무자 확인이 필요한 항목 (수동확인 화면 데모용)
+MANUAL_MAP = {
+    "rocky01": ["U-52", "U-62"],
+    "rocky02": ["U-58"],
+    "ubuntu02": ["U-53"],
+}
+
+MANUAL_EVIDENCE_TEXT = {
+    "U-52": "22/23번 포트가 모두 열려있으나, Telnet이 업무상 레거시 장비 접속 목적으로 예외 허용된 것인지는 운영 문서상 확인이 안 됨",
+    "U-58": "SNMP 데몬은 기동 중이나 실제 모니터링 서버에서 폴링 중인지, 방치된 서비스인지 트래픽만으로는 판단이 안 됨",
+    "U-62": "로그온 배너 문구는 설정되어 있으나 법무팀 표준 문구(무단접속 처벌 고지)와 일치하는지는 스크립트가 판단할 수 없음",
+    "U-53": "FTP 배너에 버전 정보는 없으나, 서비스 자체가 아직 사용 중인지 폐기 대상인지 확인이 필요함",
+}
+
 CURRENT_SETTING_TEXT = {
     "U-01": "PermitRootLogin 값이 yes로 설정되어 있어 root 계정 원격 접속이 허용됨 (sshd_config)",
     "U-02": "PASS_MIN_LEN이 5로 설정되어 있고 pam_pwquality 복잡도 검증이 비활성화되어 있음",
@@ -130,19 +144,31 @@ def _create_servers():
     return servers
 
 
-def _scan_results_for(server, item_list, vuln_codes, checked_at, run_id):
+def _scan_results_for(server, item_list, vuln_codes, checked_at, run_id, manual_codes=None):
+    manual_codes = manual_codes or []
     rows = []
     for code, ci in item_list:
-        is_vuln = code in vuln_codes
-        result = "취약" if is_vuln else "양호"
-        score = ci.weight if is_vuln else 0.0
-        current_setting = CURRENT_SETTING_TEXT.get(code) if is_vuln else None
-        recommendation = ci.guide if is_vuln else None
-        remediation_type = default_remediation_type(code) if is_vuln else "auto"
+        if code in manual_codes:
+            result = "수동확인"
+            score = ci.weight
+            current_setting = CURRENT_SETTING_TEXT.get(
+                code, "점검 스크립트가 자동으로 양호/취약을 판정하지 못했습니다")
+            recommendation = ci.guide
+            evidence = MANUAL_EVIDENCE_TEXT.get(
+                code, "결과값이 기준을 애매하게 걸쳐 있어 사람의 확인이 필요합니다")
+            remediation_type = "manual"
+        else:
+            is_vuln = code in vuln_codes
+            result = "취약" if is_vuln else "양호"
+            score = ci.weight if is_vuln else 0.0
+            current_setting = CURRENT_SETTING_TEXT.get(code) if is_vuln else None
+            recommendation = ci.guide if is_vuln else None
+            evidence = None
+            remediation_type = default_remediation_type(code) if is_vuln else "auto"
         rows.append(ScanResult(
             server_id=server.id, check_item_id=ci.id, scan_run_id=run_id,
             result=result, current_setting=current_setting, recommendation=recommendation,
-            score=score, remediation_type=remediation_type, checked_at=checked_at,
+            evidence=evidence, score=score, remediation_type=remediation_type, checked_at=checked_at,
         ))
     db.session.add_all(rows)
 
@@ -206,7 +232,8 @@ def seed():
     # 서버별 최신 진단 결과 생성
     for key in ["rocky01", "rocky02", "ubuntu01", "ubuntu02"]:
         srv = servers[key]
-        _scan_results_for(srv, unix_items, VULN_MAP[key], now - timedelta(minutes=1), latest_run.id)
+        _scan_results_for(srv, unix_items, VULN_MAP[key], now - timedelta(minutes=1), latest_run.id,
+                           manual_codes=MANUAL_MAP.get(key, []))
 
     webdb = servers["webdb01"]
     _scan_results_for(webdb, unix_items, VULN_MAP["webdb01_unix"], now - timedelta(minutes=1), latest_run.id)
@@ -293,7 +320,7 @@ def seed():
         server_id=rocky02.id, check_item_id=u11.id,
         before_result="취약", after_result="양호",
         before_score=u11.weight, after_score=0.0,
-        performed_by="팀장(approver) 승인 → 이원찬(admin) 실행",
+        performed_by="팀장(approver) 승인 · 이원찬(admin) 실행",
         performed_at=now - timedelta(days=4, hours=3),
         backup_path="/backup/rocky02/2026-08-14_U-11.tar.gz",
     )

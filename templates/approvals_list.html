@@ -12,6 +12,7 @@
 
 <div class="panel reveal">
   {% if reqs %}
+  <div class="table-scroll">
   <table class="data">
     <thead>
       <tr><th>요청일시</th><th>서버</th><th>항목</th><th>위험도</th><th>조치방식</th><th>요청자</th><th>상태</th><th>승인자</th><th></th></tr>
@@ -40,6 +41,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
   <p class="empty-note">해당 상태의 조치 승인 요청이 없습니다.</p>
   {% endif %}

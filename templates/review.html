@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}수동확인{% endblock %}
+{% block page_title %}수동확인{% endblock %}
+
+{% block content %}
+<section class="review-head reveal">
+  <div class="review-stat">
+    <span class="review-stat-label">미확인</span>
+    <span class="review-stat-value" id="pendingCount">{{ pending_count }}<small>개</small></span>
+  </div>
+  <div class="review-stat-divider"></div>
+  <div class="review-stat">
+    <span class="review-stat-label">전체 평균 보안점수</span>
+    <span class="review-stat-value" id="avgScore">{{ avg_score }}<small>/100</small></span>
+  </div>
+</section>
+
+{% if not current_user.can_run_diagnosis() %}
+<p class="empty-note">항목 판정은 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
+{% endif %}
+
+<section class="review-grid" id="reviewGrid">
+  {% for c in cards %}
+  <article class="review-card reveal" data-id="{{ c.scan_result_id }}">
+    <div class="review-card-top">
+      <span class="mono review-card-host">{{ c.server.hostname }}</span>
+      <span class="pill pill-risk-{{ c.ci.risk_level }} pill-xs">{{ RISK_LABEL.get(c.ci.risk_level, c.ci.risk_level) }}</span>
+    </div>
+    <div class="review-card-title">
+      <span class="mono review-card-code">{{ c.ci.code }}</span>
+      <h3>{{ c.ci.name }}</h3>
+    </div>
+    <div class="review-field">
+      <span class="review-field-label">현재 상태</span>
+      <p class="review-field-value">{{ c.current_setting or '기록된 값이 없습니다' }}</p>
+    </div>
+    <div class="review-field">
+      <span class="review-field-label">확인이 필요한 이유</span>
+      <p class="review-field-value review-field-muted">{{ c.evidence or '스크립트가 자동으로 판정하지 못한 항목입니다' }}</p>
+    </div>
+    {% if current_user.can_run_diagnosis() %}
+    <div class="review-actions">
+      <button type="button" class="btn btn-approve btn-block" data-outcome="양호">양호로 확정</button>
+      <button type="button" class="btn btn-danger btn-block" data-outcome="취약">취약으로 확정</button>
+    </div>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+
+<section class="review-empty{{ ' is-visible' if not cards else '' }}" id="reviewEmpty">
+  <h2>모든 항목 확인 완료</h2>
+  <p>수동확인이 필요한 진단 항목이 남아있지 않습니다.</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if current_user.can_run_diagnosis() %}
+<script src="{{ url_for('static', filename='js/review.js') }}"></script>
+{% endif %}
+{% endblock %}

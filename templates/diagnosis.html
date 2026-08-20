@@ -3,11 +3,6 @@
 {% block page_title %}진단 실행{% endblock %}
 
 {% block content %}
-{% if missing_ssh %}
-  <div class="flash flash-danger">SSH 키 경로가 설정되지 않은 서버가 있습니다: {{ missing_ssh|map(attribute='hostname')|join(', ') }}.
-    실제 모드에서는 해당 서버가 진단 대상에서 제외되니, 서버 수정 화면에서 먼저 설정해주세요.</div>
-{% endif %}
-
 <section class="grid-2">
   <div class="panel reveal">
     <div class="panel-title"><span>서버 선택 후 진단 실행</span></div>
@@ -15,8 +10,15 @@
     {% if not current_user.can_run_diagnosis() %}
       <p class="empty-note">진단 실행은 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
     {% endif %}
+    {% if missing_ssh %}
+      <span class="mode-caption mode-warn" style="margin-bottom:14px">
+        <span class="mode-dot"></span>
+        SSH 미설정 서버 {{ missing_ssh|length }}대는 실제 모드 진단 대상에서 제외됩니다
+      </span>
+    {% endif %}
 
     <form method="post" action="{{ url_for('diagnosis.run_scan') }}" id="scanForm">
+      <div class="table-scroll">
       <table class="data data-compact">
         <thead>
           <tr>
@@ -36,6 +38,7 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
       <div class="form-actions">
         <span class="text-muted" id="selCount">선택된 서버 없음 (미선택 시 전체 실행)</span>
         <button type="submit" class="btn btn-primary" {{ 'disabled' if not current_user.can_run_diagnosis() }}>
@@ -62,6 +65,7 @@
 
   <div class="panel reveal">
     <div class="panel-title"><span>실행 이력</span></div>
+    <div class="table-scroll">
     <table class="data data-compact">
       <thead><tr><th>시작 시각</th><th>대상</th><th>소요</th><th>상태</th><th>실행자</th></tr></thead>
       <tbody>
@@ -81,6 +85,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
 </section>
 {% endblock %}
