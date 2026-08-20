@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
+from datetime import timedelta
 from flask import Flask
 from flask_login import current_user
 from config import Config
 from extensions import db, login_manager
+
+KST = timedelta(hours=9)
 
 
 def create_app(config_class=Config):
@@ -36,6 +39,13 @@ def create_app(config_class=Config):
     app.register_blueprint(history_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(review_bp)
+
+    # DB에는 datetime.utcnow()(UTC)로 저장하지만 화면에는 KST로 보여줘야 하므로,
+    # 템플릿에서 strftime 전에 거치는 변환 필터를 하나 둔다. (DB 컬럼을 KST로
+    # 바꾸면 서버 간 로그 비교 시 혼란스러워지니 저장은 계속 UTC로 유지)
+    @app.template_filter("kst")
+    def to_kst(dt):
+        return dt + KST if dt else dt
 
     # 템플릿에서 사용할 전역값
     from models import RISK_LABEL

@@ -3,7 +3,7 @@
 {% block page_title %}진단 실행{% endblock %}
 
 {% block content %}
-<section class="grid-2">
+<section class="stack-col">
   <div class="panel reveal">
     <div class="panel-title"><span>서버 선택 후 진단 실행</span></div>
 
@@ -22,18 +22,18 @@
       <table class="data data-compact">
         <thead>
           <tr>
-            <th style="width:36px"><input type="checkbox" id="checkAll"></th>
-            <th>호스트명</th><th>OS</th><th>역할</th><th>IP</th>
+            <th class="col-narrow" style="width:36px"><input type="checkbox" id="checkAll"></th>
+            <th class="col-narrow">호스트명</th><th class="col-narrow">OS</th><th class="col-flex">역할</th><th class="col-narrow">IP</th>
           </tr>
         </thead>
         <tbody>
           {% for s in servers %}
           <tr>
-            <td><input type="checkbox" name="server_ids" value="{{ s.id }}" class="srv-check"></td>
-            <td class="mono">{{ s.hostname }}</td>
-            <td>{{ s.os_label }}</td>
-            <td>{{ s.role_desc }}{% if s.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
-            <td class="mono">{{ s.ip }}</td>
+            <td class="col-narrow"><input type="checkbox" name="server_ids" value="{{ s.id }}" class="srv-check"></td>
+            <td class="col-narrow mono">{{ s.hostname }}</td>
+            <td class="col-narrow">{{ s.os_label }}</td>
+            <td class="col-flex">{{ s.role_desc }}{% if s.is_web_db %} <span class="pill pill-accent pill-xs">Web/DB</span>{% endif %}</td>
+            <td class="col-narrow mono">{{ s.ip }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -59,7 +59,16 @@
         <span id="progressCount" class="mono">0 / 0</span>
       </div>
       <div class="bar-track progress-track"><div class="bar-fill bar-accent" id="progressBar" style="width:0%"></div></div>
+      <div class="progress-sub mono" id="progressSub" style="display:none"></div>
       <div class="progress-servers" id="progressServers"></div>
+      {% if active_run %}
+      <form method="post" action="{{ url_for('diagnosis.stop_scan', run_id=active_run.id) }}"
+            style="margin-top:10px" onsubmit="return confirm('진행 중인 진단을 중지할까요?')">
+        <button type="submit" class="btn btn-danger btn-sm" {{ 'disabled' if not current_user.can_run_diagnosis() }}>
+          진단 중지
+        </button>
+      </form>
+      {% endif %}
     </div>
   </div>
 
@@ -67,24 +76,38 @@
     <div class="panel-title"><span>실행 이력</span></div>
     <div class="table-scroll">
     <table class="data data-compact">
-      <thead><tr><th>시작 시각</th><th>대상</th><th>소요</th><th>상태</th><th>실행자</th></tr></thead>
+      <thead><tr><th class="col-narrow">시작 시각</th><th class="col-narrow">대상</th><th class="col-narrow">소요</th><th class="col-narrow">상태</th><th class="col-flex">실행자</th></tr></thead>
       <tbody>
         {% for r in runs %}
         <tr>
-          <td class="mono">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
-          <td>{{ r.total }}대</td>
-          <td class="mono">
+          <td class="col-narrow mono">{{ (r.started_at | kst).strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="col-narrow">{{ r.total }}대</td>
+          <td class="col-narrow mono">
             {% if r.finished_at %}{{ ((r.finished_at - r.started_at).total_seconds())|round(0)|int }}초{% else %}-{% endif %}
           </td>
-          <td>
+          <td class="col-narrow">
             {% if r.status == 'completed' %}<span class="pill pill-good pill-xs">완료</span>
+            {% elif r.status == 'cancelled' %}<span class="pill pill-xs">중지됨</span>
+            {% elif r.status == 'failed' %}
+              <span class="pill pill-vuln pill-xs fail-reason-trigger" style="cursor:pointer; text-decoration:underline dotted"
+                    data-fail-reason="{{ r.fail_reason or '원인 정보가 없습니다.' }}">실패 (원인 보기)</span>
             {% else %}<span class="pill pill-warn pill-xs">진행중</span>{% endif %}
           </td>
-          <td>{{ r.triggered_by }}</td>
+          <td class="col-flex">{{ r.triggered_by }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="failModal">
+    <div class="modal">
+      <h3>진단 실패 원인</h3>
+      <p class="modal-desc mono" id="failModalBody" style="white-space:pre-wrap; word-break:break-word"></p>
+      <div class="modal-actions">
+        <button type="button" id="failModalCloseBtn" class="btn btn-ghost">닫기</button>
+      </div>
     </div>
   </div>
 </section>
@@ -109,9 +132,30 @@
   {% if active_run %}
   window.ACTIVE_RUN_ID = {{ active_run.id }};
   {% endif %}
-  {% if request.args.get('run_id') %}
-  window.ACTIVE_RUN_ID = {{ request.args.get('run_id') }};
-  {% endif %}
+
+  (function () {
+    const modal = document.getElementById('failModal');
+    const body = document.getElementById('failModalBody');
+    const closeBtn = document.getElementById('failModalCloseBtn');
+    if (!modal) return;
+    let onClose = null;
+    function close() {
+      modal.classList.remove('open');
+      if (onClose) { const cb = onClose; onClose = null; cb(); }
+    }
+    // onCloseCallback: 팝업을 닫을 때(실행 이력 클릭이 아니라, 방금 실패한 진단을
+    // 확인 후) 이어서 페이지를 새로고침해야 하는 경우에만 넘긴다.
+    window.showFailReason = function (reason, onCloseCallback) {
+      body.textContent = reason || '원인 정보가 없습니다.';
+      onClose = onCloseCallback || null;
+      modal.classList.add('open');
+    };
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    document.querySelectorAll('.fail-reason-trigger').forEach((el) => {
+      el.addEventListener('click', () => window.showFailReason(el.dataset.failReason));
+    });
+  })();
 </script>
 <script src="{{ url_for('static', filename='js/diagnosis.js') }}"></script>
 {% endblock %}

@@ -7,24 +7,29 @@
 
   const catEl = document.getElementById('categoryChart');
   if (catEl && typeof categoryLabels !== 'undefined') {
+    // 카테고리별로 색을 다르게 줘서 도넛 조각이 서로 구분되게 한다 (앱 전체에서
+    // 이미 쓰는 색 토큰을 그대로 재사용 - 새 팔레트를 따로 만들지 않는다).
+    const catColors = ['#2C4C8C', '#E11D2E', '#E8650E', '#6E56CF', '#16A34A', '#B7871A'];
     new Chart(catEl, {
-      type: 'bar',
+      type: 'doughnut',
       data: {
         labels: categoryLabels,
         datasets: [{
           label: '취약 건수',
           data: categoryVuln,
-          backgroundColor: 'rgba(239,68,68,.55)',
-          borderRadius: 4,
-          barThickness: 22,
+          backgroundColor: categoryLabels.map((_, i) => catColors[i % catColors.length]),
+          borderColor: '#fff',
+          borderWidth: 2,
         }],
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10.5 } } },
-          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.05)' } },
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { boxWidth: 10, boxHeight: 10, font: { size: 11.5 }, padding: 10 },
+          },
         },
       },
     });

@@ -144,11 +144,13 @@ class ScanRun(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     started_at = db.Column(db.DateTime, default=datetime.utcnow)
     finished_at = db.Column(db.DateTime)
-    status = db.Column(db.String(20), default="running")  # running/completed
+    status = db.Column(db.String(20), default="running")  # running/completed/failed/cancelled
     triggered_by = db.Column(db.String(50))
     server_ids = db.Column(db.String(200))  # "1,2,3"
     total = db.Column(db.Integer, default=0)
     completed = db.Column(db.Integer, default=0)
+    # 실패 시 사람이 읽을 수 있는 원인 요약 (실행 이력 팝업에 표시). 성공/중지 시엔 비움.
+    fail_reason = db.Column(db.Text)
 
     def server_id_list(self):
         return [int(x) for x in self.server_ids.split(",") if x]

@@ -75,39 +75,28 @@
     {% endfor %}
   </div>
 
-  <div class="hm-server-list">
+  <div class="hm-server-list" id="hmServerList">
     {% for block in heatmap_server_blocks %}
     <div class="hm-server-card" data-server-id="{{ block.server.id }}">
       <div class="hm-server-head">
         <span class="mono">{{ block.server.hostname }}</span>
         <span class="pill pill-{{ block.color }} pill-xs">{{ block.grade }} · {{ block.level }}점</span>
       </div>
-      <div class="cat-accordion-list">
+      <div class="hm-cat-list">
         {% for cat in block.categories %}
-        <details class="cat-accordion" {{ 'open' if cat.open else '' }}>
-          <summary>
-            <span class="cat-accordion-title">
-              <span class="cat-accordion-chevron"></span>
-              <span class="cat-accordion-name">{{ cat.category }}</span>
-              <span class="cat-accordion-count">{{ cat.cells|length }}개</span>
-            </span>
-            <span class="cat-accordion-stats">
-              {% if cat.stats.vuln %}<span class="pill pill-vuln pill-xs">취약 {{ cat.stats.vuln }}</span>{% endif %}
-              {% if cat.stats.manual %}<span class="pill pill-manual pill-xs">수동 {{ cat.stats.manual }}</span>{% endif %}
-              {% if cat.stats.na %}<span class="pill pill-warn pill-xs">N/A {{ cat.stats.na }}</span>{% endif %}
-              {% if cat.stats.good %}<span class="pill pill-good pill-xs">양호 {{ cat.stats.good }}</span>{% endif %}
-            </span>
-          </summary>
-          <div class="cat-accordion-body">
-            <div class="hm-chip-wrap">
-              {% for cell in cat.cells %}
-              <a class="hm-chip {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else ('manual' if cell.status=='manual' else 'vuln-' ~ cell.ci.risk_level)) }}"
-                 href="{{ url_for('servers.server_detail', server_id=block.server.id, q=cell.ci.code) }}"
-                 title="{{ cell.ci.code }} {{ cell.ci.name }} ({{ RISK_LABEL.get(cell.ci.risk_level, cell.ci.risk_level) }}) · {{ cell.label }}">{{ cell.ci.code }}</a>
-              {% endfor %}
-            </div>
+        <div class="hm-cat-block">
+          <div class="hm-cat-head">
+            <span class="hm-cat-name">{{ cat.category }}</span>
+            <span class="hm-cat-count">{{ cat.cells|length }}개</span>
           </div>
-        </details>
+          <div class="hm-chip-wrap">
+            {% for cell in cat.cells %}
+            <a class="hm-chip {{ 'good' if cell.status=='good' else ('na' if cell.status=='na' else ('manual' if cell.status=='manual' else 'vuln-' ~ cell.ci.risk_level)) }}"
+               href="{{ url_for('servers.server_detail', server_id=block.server.id, q=cell.ci.code) }}"
+               title="{{ cell.ci.code }} {{ cell.ci.name }} ({{ RISK_LABEL.get(cell.ci.risk_level, cell.ci.risk_level) }}) · {{ cell.label }}">{{ cell.ci.code }}</a>
+            {% endfor %}
+          </div>
+        </div>
         {% endfor %}
       </div>
     </div>
@@ -160,17 +149,17 @@
 </section>
 
 <section class="grid-2">
-  <div class="panel reveal">
+  <div class="panel panel-compact reveal">
     <div class="panel-title">
       <span>카테고리별 위험 분포</span>
     </div>
-    <canvas id="categoryChart" height="220"></canvas>
+    <div style="height:150px"><canvas id="categoryChart"></canvas></div>
   </div>
-  <div class="panel reveal">
+  <div class="panel panel-compact reveal">
     <div class="panel-title">
       <span>전체 평균 보안점수 추세</span>
     </div>
-    <canvas id="trendChart" height="220"></canvas>
+    <canvas id="trendChart" height="120"></canvas>
   </div>
 </section>
 
@@ -217,7 +206,8 @@
 <script>
   (function () {
     const toggle = document.getElementById('heatmapToggle');
-    if (!toggle) return;
+    const list = document.getElementById('hmServerList');
+    if (!toggle || !list) return;
     const serverIds = Array.from(toggle.querySelectorAll('.hm-toggle-pill[data-server]'))
       .map((b) => b.dataset.server).filter((id) => id !== 'all');
     toggle.addEventListener('click', (e) => {

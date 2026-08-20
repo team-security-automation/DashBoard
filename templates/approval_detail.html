@@ -23,7 +23,7 @@
       <div><span class="meta-label">예상 점수 상승분</span><span class="mono">+{{ ar.expected_score_delta }}점 (항목 배점 기준)</span></div>
       <div><span class="meta-label">현재 서버 보안점수</span><span class="mono">{{ level_before }}점 ({{ grade_before }})</span></div>
       <div><span class="meta-label">요청자</span><span>{{ ar.requested_by }}</span></div>
-      <div><span class="meta-label">요청일시</span><span class="mono">{{ ar.requested_at.strftime('%Y-%m-%d %H:%M') }}</span></div>
+      <div><span class="meta-label">요청일시</span><span class="mono">{{ (ar.requested_at | kst).strftime('%Y-%m-%d %H:%M') }}</span></div>
       <div><span class="meta-label">적용 방식</span><span>{{ impact.apply }}</span></div>
       <div><span class="meta-label">영향 범위</span><span>{{ impact.scope }}</span></div>
     </div>
@@ -56,8 +56,14 @@
       {% endif %}
     {% elif ar.status == 'approved' and ar.remediation_type == 'manual' and not ar.executed_at %}
       <div class="result-box result-warn">
-        <strong>승인 완료 · 수동 조치 대기중</strong> · {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <strong>승인 완료 · 수동 조치 대기중</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>
         아래 가이드에 따라 실무자가 직접 조치한 뒤 완료 처리하세요. 완료 처리 전까지는 재진단·점수 반영이 되지 않습니다.
+      </div>
+      <div class="step-list">
+        <div class="step-item step-done reveal"><span class="step-check">✓</span> 승인 완료</div>
+        <div class="step-item step-current reveal"><span class="step-check">›</span> 실무자 직접 조치 (아래 가이드 참고)</div>
+        <div class="step-item reveal"><span class="step-check">·</span> 완료 처리 → 백업 기록</div>
+        <div class="step-item reveal"><span class="step-check">·</span> 재진단 · 점수 반영</div>
       </div>
       {% if current_user.can_run_diagnosis() %}
       <form method="post" action="{{ url_for('approvals.complete_manual', req_id=ar.id) }}" style="margin-top:12px">
@@ -71,13 +77,19 @@
       {% endif %}
     {% elif ar.status == 'approved' %}
       <div class="result-box result-good">
-        <strong>승인 완료</strong> · {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <strong>승인 완료</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>
         백업: <span class="mono">{{ ar.backup_path }}</span><br>
-        실행: {{ ar.executed_at.strftime('%Y-%m-%d %H:%M') if ar.executed_at else '-' }}
+        실행: {{ (ar.executed_at | kst).strftime('%Y-%m-%d %H:%M') if ar.executed_at else '-' }}
+      </div>
+      <div class="step-list">
+        <div class="step-item step-done reveal"><span class="step-check">✓</span> 백업 생성 <span class="mono step-detail">{{ ar.backup_path }}</span></div>
+        <div class="step-item step-done reveal"><span class="step-check">✓</span> 설정 변경 적용</div>
+        <div class="step-item step-done reveal"><span class="step-check">✓</span> 재진단 실행</div>
+        <div class="step-item step-done reveal"><span class="step-check">✓</span> 점수 반영 <span class="mono step-detail">{{ ar.before_score }} → {{ ar.after_score }}점</span></div>
       </div>
     {% else %}
       <div class="result-box result-bad">
-        <strong>거부됨</strong> · {{ ar.approver }} · {{ ar.decided_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        <strong>거부됨</strong> · {{ ar.approver }} · {{ (ar.decided_at | kst).strftime('%Y-%m-%d %H:%M') }}<br>
         사유: {{ ar.reject_reason }}
       </div>
     {% endif %}

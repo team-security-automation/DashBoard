@@ -45,7 +45,7 @@
     <tbody>
       {% for h in action_history %}
       <tr>
-        <td class="mono">{{ h.performed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="mono">{{ (h.performed_at | kst).strftime('%Y-%m-%d %H:%M') }}</td>
         <td class="mono">{{ h.server.hostname }}</td>
         <td><span class="mono">{{ h.check_item.code }}</span> {{ h.check_item.name }}</td>
         <td><span class="pill pill-vuln pill-xs">취약</span> <span class="mono">{{ h.before_score }}</span></td>
