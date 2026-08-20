@@ -22,6 +22,12 @@ from extensions import db
 RISK_WEIGHT = {"H": 10, "M": 8, "L": 6}
 RISK_LABEL = {"H": "상", "M": "중", "L": "하"}
 
+# ansible/scripts/ 밑에 이 이름 그대로의 폴더(rocky_linux/ubuntu)가 있어야 진단이 돈다.
+# 서버 등록 폼(라디오)과 CSV 업로드 검증이 둘 다 이 목록 하나만 본다 - 오타로 그른
+# os_family("rocky", "Rocky" 등)가 들어가면 등록은 성공해도 진단 시 조용히 스크립트를
+# 못 찾는 문제가 있었다.
+OS_FAMILIES = ["Rocky Linux", "Ubuntu"]
+
 ROLE_LABEL = {
     "admin": "실무자(관리자)",
     "approver": "승인자",

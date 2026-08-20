@@ -83,8 +83,10 @@
 <div class="modal-overlay" id="csvModal">
   <div class="modal">
     <h3>CSV 일괄 등록</h3>
-    <p class="modal-desc">헤더: <span class="mono">hostname,ip,os_family,os_version,role_desc,business_name,owner,ssh_user,ssh_port,ssh_key_path,ssh_become</span><br>
-    (ssh_key_path를 비워두면 등록은 되지만 "SSH 미설정"으로 표시되어 진단 실행 시 인벤토리에서 빠집니다)</p>
+    <p class="modal-desc">헤더: <span class="mono">hostname,ip,os_family,os_version,role_desc,is_web_db,ssh_user,ssh_port,ssh_key_path,ssh_become</span><br>
+    (os_family는 <span class="mono">Rocky Linux</span> / <span class="mono">Ubuntu</span> 둘 중 하나만 인식됩니다(대소문자 무관) - 다르면 그 행은 건너뜁니다.<br>
+    is_web_db/ssh_become은 <span class="mono">yes</span>/<span class="mono">true</span>/<span class="mono">1</span>이면 켜짐으로 인식.<br>
+    ssh_key_path를 비워두면 등록은 되지만 "SSH 미설정"으로 표시되어 진단 실행 시 인벤토리에서 빠집니다)</p>
     <form method="post" action="{{ url_for('servers.upload_csv') }}" enctype="multipart/form-data">
       <input type="file" name="csv_file" accept=".csv" required>
       <div class="modal-actions">

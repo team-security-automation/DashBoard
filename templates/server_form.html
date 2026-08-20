@@ -17,7 +17,7 @@
       <div class="field">
         <label>OS</label>
         <div class="radio-group" id="osFamilyGroup">
-          {% for fam in ['Rocky Linux', 'Ubuntu'] %}
+          {% for fam in os_families %}
           <label class="radio-opt">
             <input type="radio" name="os_family" value="{{ fam }}"
                    {{ 'checked' if (server and server.os_family == fam) or (not server and loop.first) else '' }}>

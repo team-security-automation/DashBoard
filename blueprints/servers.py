@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from extensions import db
-from models import Server, CheckItem, ApprovalRequest, RISK_LABEL
+from models import Server, CheckItem, ApprovalRequest, RISK_LABEL, OS_FAMILIES
 from scoring import calc_security_level, GRADE_COLOR
 
 servers_bp = Blueprint("servers", __name__, url_prefix="/servers")
@@ -59,7 +59,7 @@ def new_server():
         flash(f"서버 '{srv.hostname}'가 등록되었습니다. 진단 실행 화면에서 최초 진단을 실행하세요.", "success")
         return redirect(url_for("servers.list_servers"))
 
-    return render_template("server_form.html", server=None)
+    return render_template("server_form.html", server=None, os_families=OS_FAMILIES)
 
 
 @servers_bp.route("/upload-csv", methods=["POST"])
@@ -71,25 +71,38 @@ def upload_csv():
     file = request.files.get("csv_file")
     if not file or file.filename == "":
         flash("CSV 파일을 선택해주세요. (형식: hostname,ip,os_family,os_version,role_desc,"
-              "ssh_user,ssh_port,ssh_key_path,ssh_become)", "warning")
+              "is_web_db,ssh_user,ssh_port,ssh_key_path,ssh_become)", "warning")
         return redirect(url_for("servers.list_servers"))
+
+    # os_family는 자유 텍스트로 받으면 등록은 성공해놓고 진단 시 스크립트 폴더를
+    # 못 찾아 조용히 실패한다 (개별 등록 폼은 라디오로 이미 막아뒀음). CSV도 똑같이
+    # OS_FAMILIES 두 값만 허용하고, 대소문자/공백만 다른 정도는 정규화해서 받아준다.
+    os_family_lookup = {f.strip().lower(): f for f in OS_FAMILIES}
 
     content = file.stream.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content))
     created = 0
     missing_ssh = []
+    skipped = []
     for row in reader:
         if not row.get("hostname"):
+            continue
+        raw_os_family = row.get("os_family", "").strip()
+        os_family = os_family_lookup.get(raw_os_family.lower())
+        if not os_family:
+            skipped.append(f"{row['hostname'].strip()} (os_family '{raw_os_family}' 인식 불가"
+                            f" - {' 또는 '.join(OS_FAMILIES)}만 허용)")
             continue
         ssh_key_path = row.get("ssh_key_path", "").strip() or None
         srv = Server(
             hostname=row["hostname"].strip(),
             ip=row.get("ip", "").strip(),
-            os_family=row.get("os_family", "").strip() or "Unknown",
+            os_family=os_family,
             os_version=row.get("os_version", "").strip() or "-",
             role_desc=row.get("role_desc", "").strip(),
             business_name=row.get("business_name", "").strip(),
             owner=row.get("owner", "").strip(),
+            is_web_db=(row.get("is_web_db", "").strip().lower() not in ("", "0", "false", "no")),
             # SSH 접속정보도 CSV로 같이 받아야 등록 즉시 진단 실행이 가능하다.
             # 안 채우면 개별 서버 수정 화면에서 나중에 채울 때까지 인벤토리에서 빠진다.
             ssh_user=row.get("ssh_user", "").strip() or "ansible",
@@ -105,7 +118,9 @@ def upload_csv():
     msg = f"CSV 일괄 등록 완료: {created}건 등록되었습니다."
     if missing_ssh:
         msg += f" (SSH 키 경로 미입력 {len(missing_ssh)}건: {', '.join(missing_ssh)} - 진단 실행 전 서버 수정에서 채워야 함)"
-    flash(msg, "success" if not missing_ssh else "warning")
+    if skipped:
+        msg += f" / 건너뜀 {len(skipped)}건: {'; '.join(skipped)}"
+    flash(msg, "success" if not (missing_ssh or skipped) else "warning")
     return redirect(url_for("servers.list_servers"))
 
 
@@ -135,7 +150,7 @@ def edit_server(server_id):
         flash(f"서버 '{srv.hostname}' 정보가 수정되었습니다.", "success")
         return redirect(url_for("servers.list_servers"))
 
-    return render_template("server_form.html", server=srv)
+    return render_template("server_form.html", server=srv, os_families=OS_FAMILIES)
 
 
 @servers_bp.route("/<int:server_id>/delete", methods=["POST"])
