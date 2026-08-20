@@ -64,6 +64,12 @@ def generate_inventory(server_ids=None, path=None):
             "ansible_ssh_private_key_file": s.ssh_key_path,
             "ansible_become": bool(s.ssh_become),
             "server_id": s.id,  # 결과 JSON을 어느 Server row에 매핑할지 대조용
+            # dashboard/ansible에는 ansible.cfg를 두지 않으므로(그건 security-platform
+            # 전용) SSH 타임아웃/킵얼라이브를 인벤토리 변수로 직접 넘긴다. 이게 없으면
+            # 전송 도중 연결이 끊겨도 감지할 방법이 없어 진단이 무한정 멈춘다.
+            "ansible_ssh_common_args": (
+                "-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+            ),
         }
 
     inventory = {"all": {"children": groups}} if groups else {"all": {"hosts": {}}}
