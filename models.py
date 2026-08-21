@@ -68,7 +68,7 @@ class Server(db.Model):
     __tablename__ = "server"
 
     id = db.Column(db.Integer, primary_key=True)
-    hostname = db.Column(db.String(100), nullable=False)
+    hostname = db.Column(db.String(100), nullable=False, unique=True)
     ip = db.Column(db.String(50), nullable=False)
     os_family = db.Column(db.String(20), nullable=False)   # Rocky / Ubuntu
     os_version = db.Column(db.String(20), nullable=False)  # 9 / 10 / 24.04 / 26.04

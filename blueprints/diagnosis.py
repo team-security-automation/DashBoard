@@ -10,9 +10,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from flask_login import login_required, current_user
 
 from extensions import db
-from models import Server, ScanRun, ScanResult, CheckItem
+from models import Server, ScanRun, ScanResult, CheckItem, ApprovalRequest
 from inventory import generate_inventory, servers_missing_ssh_config, ANSIBLE_DIR
 from impact import default_remediation_type
+from blueprints.review import pending_manual_rows
 
 diagnosis_bp = Blueprint("diagnosis", __name__, url_prefix="/diagnosis")
 
@@ -82,6 +83,9 @@ SCRIPTS_ROOT = Path(ANSIBLE_DIR) / "scripts"
 # playbooks/diagnose.yml의 remote_work_dir과 반드시 같은 값이어야 한다.
 REMOTE_WORK_DIR = "/tmp/security_check"
 
+FIX_RESULTS_DIR = Path(ANSIBLE_DIR).parent / "fix_results"
+FIX_PLAYBOOK_RELATIVE_PATH = "playbooks/fix.yaml"
+
 _RUN_TASK_NAME = "점검 스크립트 일괄 실행 (표준 JSON 출력)"
 # "이 태스크 시작 직전까지의 누적 %" - 목록에서 _RUN_TASK_NAME 앞까지의
 # 가중치 합. 하드코딩 안 해서 앞단 태스크 구성이 바뀌어도 자동으로 맞는다.
@@ -91,6 +95,78 @@ _RUN_TASK_WEIGHT = dict(REAL_TASK_WEIGHTS)[_RUN_TASK_NAME]
 
 def _os_group_name(server):
     return server.os_family.strip().lower().replace(" ", "_")
+
+
+# ---------------------------------------------------------------------------
+# 자동 조치 실행 (playbooks/fix.yaml) - blueprints/approvals.py의 execute()에서 호출.
+# 승인 하나(=서버 한 대, 항목 한 개)를 그 자리에서 바로 실행하고 결과를 보여줘야
+# 하므로, 진단처럼 백그라운드 스레드로 안 돌리고 요청 처리 중에 동기 호출한다.
+# ---------------------------------------------------------------------------
+def run_fix_real(server, check_codes):
+    """서버 한 대에 대해 check_codes(예: ["U-14"])의 *_fix.sh를 실제로 SSH 실행한다.
+    반환값: (성공여부, 항목별 결과 dict 리스트, 실패 시 사람이 읽을 에러 메시지)"""
+    import ansible_runner  # USE_REAL_ANSIBLE=True일 때만 필요하므로 지연 임포트
+
+    inventory_path = generate_inventory(server_ids=[server.id])
+    FIX_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    result_path = FIX_RESULTS_DIR / f"{server.hostname}.json"
+    # 이번 실행이 실패해서 결과 파일을 못 남기면, 저번 실행의 결과 파일을 그대로
+    # "이번 결과"로 오인하면 안 되니 미리 지운다.
+    result_path.unlink(missing_ok=True)
+
+    result = ansible_runner.run(
+        private_data_dir=ANSIBLE_DIR,
+        playbook=FIX_PLAYBOOK_RELATIVE_PATH,
+        inventory=inventory_path,
+        limit=server.hostname,
+        extravars={"target_hosts": server.hostname, "selected_ids": check_codes},
+        quiet=True,
+        envvars={"ANSIBLE_SSH_RETRIES": "3", "ANSIBLE_TIMEOUT": "30"},
+    )
+
+    if result.status != "successful":
+        fail_msg = None
+        for event in result.events:
+            if event.get("event") in ("runner_on_unreachable", "runner_on_failed"):
+                res = (event.get("event_data") or {}).get("res") or {}
+                fail_msg = res.get("msg") or res.get("stderr")
+                if fail_msg:
+                    break
+        return False, [], _guide_for_failure(fail_msg or str(result.status))
+
+    if not result_path.exists():
+        return False, [], "조치 결과 파일을 받지 못했습니다 (fix.yaml의 결과 저장 단계가 실행되지 않은 것으로 보입니다)."
+
+    try:
+        items = json.loads(result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return False, [], f"조치 결과 JSON 파싱 실패: {e}"
+
+    return True, items, None
+
+
+def fix_item_code(item):
+    return item.get("check_id") or item.get("fix_id")
+
+
+def fix_item_outcome(item):
+    """fix 스크립트가 낸 JSON 한 건을 (성공여부, 재검증결과, 백업경로, 설명텍스트)로 정규화한다.
+    스크립트 세대가 두 가지 계약을 섞어 쓰고 있어 여기서 통일한다:
+      구버전(account/* 등): check_id/fix_status(성공|실패)/backup_path/reverified_status(양호|취약)
+      신버전(file/* 등)   : fix_id/status(조치완료|조치불필요|조치실패|수동조치필요)/action
+    """
+    if "reverified_status" in item:
+        ok = item.get("fix_status") == "성공"
+        result = item.get("reverified_status") or ("양호" if ok else "취약")
+        backup_path = item.get("backup_path")
+        detail = None
+    else:
+        status = item.get("status")
+        ok = status in ("조치완료", "조치불필요")
+        result = "양호" if ok else "취약"
+        backup_path = None
+        detail = item.get("action")
+    return ok, result, backup_path, detail
 
 
 def _total_check_items(os_group):
@@ -415,9 +491,42 @@ def index():
     server_map = {s.id: s for s in servers}
     active_run = ScanRun.query.filter_by(status="running").order_by(ScanRun.started_at.desc()).first()
     missing_ssh = servers_missing_ssh_config()
+
+    # "처리할 항목" 큐 - 예전엔 수동확인/조치승인이 사이드바에서 각자 다른 화면이라
+    # 진단 결과를 보다가 처리할 게 있는지 알려면 매번 다른 메뉴로 넘어가야 했다.
+    # 역할별로 지금 이 사람이 처리할 수 있는 것만 모아서 보여주고, 클릭하면 해당
+    # 서버 상세 페이지로 이동해 그 자리에서 바로 처리한다.
+    # 같은 (서버, 점검항목)에 예전 승인요청이 여러 건 쌓여있을 수 있다 (거부 후
+    # 재요청, 재진단으로 다시 취약 판정돼 새로 요청한 경우 등). "지금 상태"는
+    # 상태와 무관하게 가장 최근 요청 하나로만 판단해야 한다 - 상태로 먼저 걸러버리면
+    # 예전에 이미 실행 완료된 항목이 그보다 옛날의(그때는 아직 미실행이던) 요청
+    # 때문에 "아직도 실행 대기"로 잘못 보이는 문제가 있었다. server_detail.py의
+    # approval_map과 동일한 규칙.
+    latest_by_item = {}
+    for a in sorted(ApprovalRequest.query.all(), key=lambda x: x.requested_at, reverse=True):
+        latest_by_item.setdefault((a.server_id, a.check_item_id), a)
+
+    queue = []
+    if current_user.is_authenticated and current_user.can_run_diagnosis():
+        for srv, r in pending_manual_rows():
+            queue.append(dict(kind="수동확인", server=srv, ci=r.check_item,
+                               anchor=f"item-{r.check_item.code}"))
+        for a in latest_by_item.values():
+            if a.status != "approved" or a.executed_at is not None:
+                continue
+            kind = "자동조치 실행 대기" if a.remediation_type == "auto" else "수동조치 완료처리 대기"
+            queue.append(dict(kind=kind, server=a.server, ci=a.check_item,
+                               anchor=f"item-{a.check_item.code}"))
+    elif current_user.is_authenticated and current_user.can_decide_approval():
+        for a in latest_by_item.values():
+            if a.status != "pending":
+                continue
+            queue.append(dict(kind="승인 대기", server=a.server, ci=a.check_item,
+                               anchor=f"item-{a.check_item.code}"))
+
     return render_template(
         "diagnosis.html", servers=servers, runs=runs, server_map=server_map,
-        active_run=active_run, missing_ssh=missing_ssh,
+        active_run=active_run, missing_ssh=missing_ssh, queue=queue,
         use_real_ansible=current_app.config.get("USE_REAL_ANSIBLE", False),
     )
 
@@ -522,5 +631,7 @@ def status(run_id):
     return jsonify(dict(
         id=run.id, status=run.status, total=run.total, completed=run.completed,
         servers=hostnames, percent=percent, hosts_detail=hosts_detail,
+        # 완료 배너에서 "이 서버 결과 보기" 링크를 바로 만들 수 있게 id도 같이 내려준다.
+        server_links=[dict(id=s.id, hostname=s.hostname) for s in servers],
         fail_reason=run.fail_reason,
     ))

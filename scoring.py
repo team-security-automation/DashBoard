@@ -32,9 +32,9 @@ def item_score_value(risk_level: str, result: str) -> float:
     """개별 항목의 '식별된 취약점 점수'(진단결과값)를 반환한다."""
     weight = RISK_WEIGHT.get(risk_level, 0)
     # 수동확인(스크립트가 자동으로 양호/취약을 판정하지 못해 사람의 확인이 필요한 상태)은
-    # 승인 절차(조치 승인 요청 -> 수동 조치 완료 처리)를 거쳐 해소되기 전까지 취약과
-    # 동일하게 감점한다 - approvals.py의 _execute_remediation이 완료 처리 시 결과를
-    # "양호"로 갱신해 감점을 해제한다.
+    # 승인 절차(조치 승인 요청 -> 자동 조치 실행/수동 조치 완료 처리)를 거쳐 해소되기
+    # 전까지 취약과 동일하게 감점한다 - approvals.py의 _execute_remediation_auto /
+    # _complete_manual_remediation이 처리 완료 시 결과를 갱신해 감점을 해제한다.
     if result in ("취약", "수동확인"):
         return weight
     if result == "부분":
@@ -74,6 +74,31 @@ def calc_security_level(scan_results):
         ci = r.check_item
         if r.result == "N/A":
             continue
+        total += ci.weight
+        identified += item_score_value(ci.risk_level, r.result)
+
+    if total == 0:
+        return 0.0, "-", 0.0, 0.0
+
+    level = (total - identified) / total * 100
+    level = round(level, 1)
+    return level, grade_of(level), total, identified
+
+
+def calc_security_level_auto_only(scan_results):
+    """
+    자동 진단 스크립트가 실제로 판정한 것(양호/취약)만으로 계산한 점수 - 수동확인은
+    N/A와 똑같이 분모에서 아예 뺀다 (calc_security_level은 수동확인을 사람이 정리할
+    때까지 취약과 동일하게 감점하는데, 그래서 "자동 진단 직후"와 "수동확인까지 끝난
+    뒤"를 구분해서 보고 싶어도 한 숫자만 있어서 비교가 안 됐다).
+    반환 형식은 calc_security_level과 동일.
+    """
+    total = 0.0
+    identified = 0.0
+    for r in scan_results:
+        if r.result in ("N/A", "수동확인"):
+            continue
+        ci = r.check_item
         total += ci.weight
         identified += item_score_value(ci.risk_level, r.result)
 

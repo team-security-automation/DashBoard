@@ -7,19 +7,19 @@
   <form method="post">
     <div class="form-grid">
       <div class="field">
-        <label>호스트명</label>
+        <label>호스트명 <span class="required-mark">*</span></label>
         <input type="text" name="hostname" value="{{ server.hostname if server else '' }}" required>
       </div>
       <div class="field">
-        <label>IP</label>
+        <label>IP <span class="required-mark">*</span></label>
         <input type="text" name="ip" value="{{ server.ip if server else '' }}" required>
       </div>
       <div class="field">
-        <label>OS</label>
+        <label>OS <span class="required-mark">*</span></label>
         <div class="radio-group" id="osFamilyGroup">
           {% for fam in os_families %}
           <label class="radio-opt">
-            <input type="radio" name="os_family" value="{{ fam }}"
+            <input type="radio" name="os_family" value="{{ fam }}" required
                    {{ 'checked' if (server and server.os_family == fam) or (not server and loop.first) else '' }}>
             {{ fam }}
           </label>
@@ -27,7 +27,7 @@
         </div>
       </div>
       <div class="field">
-        <label>OS 버전</label>
+        <label>OS 버전 <span class="required-mark">*</span></label>
         <select name="os_version" id="osVersionSelect" required>
           <option value="9" data-os="Rocky Linux" {{ 'selected' if server and server.os_version == '9' else '' }}>9</option>
           <option value="10" data-os="Rocky Linux" {{ 'selected' if server and server.os_version == '10' else '' }}>10</option>

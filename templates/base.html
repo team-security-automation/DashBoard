@@ -31,18 +31,9 @@
         <span class="nav-ico">▤</span> 서버 관리
       </a>
       <a href="{{ url_for('diagnosis.index') }}"
-         class="{{ 'active' if request.endpoint and request.endpoint.startswith('diagnosis.') else '' }}">
-        <span class="nav-ico">◎</span> 진단 실행
-      </a>
-      <a href="{{ url_for('review.index') }}"
-         class="{{ 'active' if request.endpoint and request.endpoint.startswith('review.') else '' }}">
-        <span class="nav-ico">◐</span> 수동확인
-        {% if manual_review_count %}<span class="nav-badge">{{ manual_review_count }}</span>{% endif %}
-      </a>
-      <a href="{{ url_for('approvals.list_approvals') }}"
-         class="{{ 'active' if request.endpoint and request.endpoint.startswith('approvals.') else '' }}">
-        <span class="nav-ico">✓</span> 조치 승인
-        {% if pending_count %}<span class="nav-badge">{{ pending_count }}</span>{% endif %}
+         class="{{ 'active' if request.endpoint and (request.endpoint.startswith('diagnosis.') or request.endpoint.startswith('review.') or request.endpoint.startswith('approvals.')) else '' }}">
+        <span class="nav-ico">◎</span> 진단·조치
+        {% if manual_review_count + pending_count %}<span class="nav-badge">{{ manual_review_count + pending_count }}</span>{% endif %}
       </a>
       <a href="{{ url_for('history.index') }}"
          class="{{ 'active' if request.endpoint and request.endpoint.startswith('history.') else '' }}">

@@ -402,13 +402,165 @@ table.data td.col-flex { white-space: nowrap; }
 }
 table.data.data-compact td, table.data.data-compact th { padding: 12px 14px; font-size: 15px; }
 table.data tr:hover td { background: var(--bg-elevated); }
+.row-clickable { cursor: pointer; }
+
+/* ---------- 서버 상세 "지금 처리할 것" 요약 --------------------------------------------- */
+.status-summary-groups { display: flex; flex-direction: column; gap: 14px; }
+.status-summary-group { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.status-summary-label {
+  flex-shrink: 0; font-size: 13.5px; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+  white-space: nowrap;
+}
+.status-summary-label-warn { background: var(--warn-dim); color: #8A5A08; }
+.status-summary-label-accent { background: var(--accent-dim); color: var(--accent); }
+.status-summary-label-vuln { background: var(--vuln-dim); color: #B3121F; }
+.status-summary-label-good { background: var(--good-dim); color: #157A3E; }
+.status-summary-empty { font-size: 13.5px; color: var(--text-muted); }
+.status-summary-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.status-summary-chip {
+  font-size: 13.5px; padding: 5px 10px; border-radius: 999px; background: var(--bg-elevated);
+  color: var(--text-primary); text-decoration: none; transition: background .12s;
+}
+.status-summary-chip:hover { background: var(--bg-elevated-2); }
+.status-summary-chip .mono { color: var(--text-muted); margin-right: 4px; }
+
+/* ---------- 일괄 처리 사이드 드로어 -------------------------------------------------- */
+.side-drawer-overlay {
+  position: fixed; inset: 0; background: rgba(16, 18, 22, .4); display: none;
+  z-index: 60; backdrop-filter: blur(2px);
+}
+.side-drawer-overlay.open { display: block; }
+.side-drawer {
+  position: absolute; top: 0; right: 0; height: 100%; width: 420px; max-width: 92vw;
+  background: var(--bg-surface); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; animation: drawer-in .18s ease-out;
+}
+@keyframes drawer-in { from { transform: translateX(24px); opacity: .6; } to { transform: translateX(0); opacity: 1; } }
+.side-drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 22px; border-bottom: 1px solid var(--border-soft); flex-shrink: 0;
+}
+.side-drawer-head h3 { margin: 0; font-size: 16px; }
+.side-drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px; }
+.bulk-drawer-panel { display: none; }
+.bulk-drawer-panel.active { display: block; }
+.bulk-drawer-form + .bulk-drawer-subhead,
+.bulk-drawer-readonly + .bulk-drawer-subhead,
+.bulk-drawer-actions + .bulk-drawer-subhead { margin-top: 22px; }
+.bulk-drawer-subhead {
+  font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px;
+}
+.bulk-drawer-readonly { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.bulk-drawer-selectall {
+  display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600;
+  padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-soft);
+}
+.bulk-drawer-cat { margin-bottom: 16px; }
+.bulk-drawer-cat-name { font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+.bulk-drawer-kind-head {
+  font-size: 14.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border-soft);
+}
+.bulk-drawer-kind-head:not(:first-child) { margin-top: 24px; }
+.bulk-drawer-manual-form {
+  padding: 12px 14px; margin-bottom: 10px; background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+}
+.bulk-drawer-manual-head {
+  font-size: 14px; margin-bottom: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bulk-drawer-manual-row { display: flex; gap: 8px; align-items: center; }
+.bulk-drawer-manual-row .decide-input { flex: 1; width: auto; }
+.bulk-drawer-item {
+  display: flex; align-items: center; gap: 8px; font-size: 14.5px; padding: 7px 4px;
+  border-radius: var(--radius-sm);
+}
+.bulk-drawer-item:hover { background: var(--bg-elevated); }
+.bulk-drawer-item-disabled { opacity: .5; }
+.bulk-drawer-item-disabled:hover { background: none; }
+.bulk-drawer-actions .btn:disabled { opacity: .45; cursor: not-allowed; }
+.bulk-drawer-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.bulk-drawer-actions .btn { width: 100%; }
+
+/* ---------- "조치할 것" 통합 리스트 (상태별 화면 전환 없이 한 줄씩 처리) ------------ */
+.hidden-bulk-form { display: none; }
+.action-selectall-bar {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.action-selectall-bar .bulk-drawer-selectall { padding: 0; margin: 0; border: none; }
+.action-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 4px; border-radius: var(--radius-sm); flex-wrap: wrap;
+}
+.action-row:hover { background: var(--bg-elevated); }
+.action-row-main { display: flex; align-items: center; gap: 8px; font-size: 14.5px; min-width: 0; }
+.action-tag {
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; flex-shrink: 0;
+}
+.action-tag-auto { background: var(--accent-dim); color: var(--accent); }
+.action-tag-manual { background: var(--warn-dim); color: #8A5A08; }
+.action-row-widget { flex-shrink: 0; display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.action-check { display: flex; align-items: center; gap: 6px; font-size: 13.5px; white-space: nowrap; }
+.action-check-disabled { opacity: .5; }
+.action-mini-form { display: flex; align-items: center; gap: 6px; }
+.action-mini-form .decide-input { width: 190px; }
+.action-mini-form-block {
+  flex-wrap: wrap; padding: 8px 6px; border-radius: var(--radius-sm); row-gap: 6px;
+}
+.action-mini-form-block:hover { background: var(--bg-elevated); }
+.action-mini-form-block .decide-input { flex: 1; min-width: 140px; }
+.action-check-row {
+  display: flex; align-items: center; gap: 8px; font-size: 14.5px; padding: 8px 6px;
+  border-radius: var(--radius-sm);
+}
+.action-check-row:hover { background: var(--bg-elevated); }
+.status-summary-chip .action-tag { margin-right: 2px; }
+
+/* 드로어 안에서 자동/수동을 접힌 토글로 나눈다 - 열자마자는 제목만 보이게 해서
+   빽빽함을 줄이고, 필요한 쪽만 펼쳐서 본다. */
+.bulk-drawer-toggle {
+  background: var(--bg-elevated); border-radius: var(--radius-sm); margin-bottom: 8px;
+  overflow: hidden;
+}
+.bulk-drawer-toggle summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  font-size: 13.5px; font-weight: 700; color: var(--text-primary);
+}
+.bulk-drawer-toggle summary::-webkit-details-marker,
+.bulk-drawer-toggle summary::marker { display: none; content: ''; }
+.bulk-drawer-toggle summary::before {
+  content: ''; width: 6px; height: 6px; flex-shrink: 0;
+  border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg); transition: transform .2s cubic-bezier(.22,1,.36,1);
+}
+.bulk-drawer-toggle[open] summary::before { transform: rotate(45deg); }
+.bulk-drawer-toggle summary:hover { background: var(--bg-elevated-2); }
+.bulk-drawer-toggle-body { padding: 4px 12px 12px; }
+.bulk-drawer-toggle .bulk-drawer-form { margin: 0; }
+.bulk-drawer-toggle .action-mini-form-block:hover { background: var(--bg-elevated-2); }
 table.data tbody tr:last-child td { border-bottom: none; }
 tr.row-flagged td { background: var(--accent-dim) !important; }
 .row-actions { display: flex; gap: 6px; white-space: nowrap; align-items: center; }
+.approval-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 150px; white-space: normal; }
+/* .decide-inline은 원래 approvals_list.html처럼 폭 넉넉한 flex 줄에서 절대위치
+   말풍선으로 뜨게 만든 건데, 이 결과 표처럼 좁은 셀 안에 들어가면 정상 흐름을
+   벗어나 다른 행 위로 붕 떠서 겹쳐 보였다. 이 표 안에서는 팝오버 대신 그 자리에서
+   그냥 아래로 펼쳐지게(정상 흐름 유지) 만든다. */
+.results-table .decide-inline {
+  position: static; transform: none; box-shadow: none; background: transparent;
+  padding: 6px 0 0; margin: 0; flex-wrap: wrap;
+}
+.results-table .decide-inline::before { display: none; }
+.results-table .decide-form { display: flex; flex-direction: column; align-items: flex-start; }
+.results-table .decide-input { width: 170px; }
 .reject-form-compact { display: inline-flex; gap: 6px; align-items: center; }
 .reject-form-compact input { width: 92px; padding: 6px 8px; font-size: 13.5px; }
 table.data td.detail-text { max-width: 380px; white-space: normal; }
 .detail-current { color: #B3121F; font-size: 14.5px; margin-bottom: 5px; }
+.detail-current-ok { color: var(--text-primary); } /* 양호 항목은 "문제"가 아니라 참고 정보라 경고색(빨강) 안 씀 */
 .detail-reco { color: var(--text-secondary); font-size: 14.5px; padding-left: 9px; border-left: 2px solid var(--border); }
 
 /* ---------- Buttons: modern rounded-rect, subtle depth (not glossy) ------------------------------- */
@@ -451,6 +603,7 @@ table.data td.detail-text { max-width: 380px; white-space: normal; }
 
 /* ---------- Forms ----------------------------------------------------------------- */
 label { display: block; font-size: 14.5px; color: var(--text-muted); margin: 12px 0 6px; }
+.required-mark { color: var(--vuln); font-weight: 700; }
 input[type=text], input[type=password], input[type=file], select, textarea {
   width: 100%; background: var(--bg-elevated); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 11px 14px; color: var(--text-primary); font-size: 16px;
@@ -477,6 +630,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-soft); }
 .panel-form { max-width: 720px; }
 .inline-form { display: inline-flex; gap: 8px; align-items: center; }
+.quick-judge { display: inline-flex; gap: 6px; align-items: center; }
 
 /* 승인목록에서 바로 승인/거부하는 인라인 액션 - 표 안이라 좁으므로 사유 입력칸도 압축 */
 /* 승인/거부 버튼을 누르기 전엔 버튼만, 누르면 그 자리에서 입력칸+확인/취소가 펼쳐진다
@@ -598,12 +752,25 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .guide-text { font-size: 15.5px; color: var(--text-secondary); line-height: 1.7; }
 
 /* ---------- Detail head (server_detail) ---------------------------------------------- */
-.detail-head { display: grid; grid-template-columns: 260px 1fr; gap: 20px; }
-@media (max-width: 900px) { .detail-head { grid-template-columns: 1fr; } }
-.score-panel { display: flex; flex-direction: column; gap: 10px; justify-content: center; align-items: flex-start; }
-.meta-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-.meta-grid > div { display: flex; flex-direction: column; gap: 3px; }
-.meta-label { font-size: 13.5px; color: var(--text-muted); }
+/* 보안수준 카드 두 개를 위에 크게 나란히 두고, 서버 정보 박스는 그 밑에
+   가로로 넓게 깐다 - 세로로 쌓여서 박스가 커 보인다는 피드백. */
+.detail-head { display: flex; flex-direction: column; gap: 16px; }
+.score-panel-stack { display: flex; flex-direction: row; gap: 16px; flex-wrap: wrap; }
+.score-panel {
+  flex: 1 1 260px; display: flex; flex-direction: column; gap: 10px;
+  justify-content: center; align-items: flex-start;
+}
+.kpi-label-hint {
+  font-size: 11.5px; font-weight: 600; color: var(--text-muted); background: var(--bg-elevated-2);
+  padding: 2px 7px; border-radius: 999px; margin-left: 6px; cursor: help;
+}
+.score-sub-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+.meta-panel { padding: 12px 20px; } /* 볼륨이 너무 크다는 피드백 - 단어 안 잘릴 정도로만 압축 */
+.meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px 14px; }
+@media (max-width: 760px) { .meta-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.meta-grid > div { display: flex; flex-direction: column; gap: 1px; }
+.meta-label { font-size: 11.5px; color: var(--text-muted); }
+.meta-grid > div > span:last-child { font-size: 13.5px; }
 
 /* ---------- Tabs ------------------------------------------------------------------------ */
 .tab-bar { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
@@ -611,6 +778,31 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .tab span { margin-left: 4px; font-family: var(--font-mono); font-size: 13.5px; }
 .tab.active { color: var(--accent); border-color: var(--accent); }
 .tab:hover { color: var(--text-primary); }
+
+/* ---------- Bulk action bar (조치 승인 일괄 선택) ---------------------------------------- */
+.bulk-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 14px; padding: 10px 14px; background: var(--bg-elevated);
+  border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+}
+.bulk-bar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bulk-count { color: var(--text-secondary); font-size: 14px; }
+.bulk-quickpick {
+  display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--text-muted); margin: 0;
+}
+.bulk-quickpick select { width: auto; padding: 7px 10px; font-size: 14px; }
+.bulk-check { width: auto; }
+
+/* ---------- 처리할 항목 큐 (진단·조치 통합 화면) ------------------------------------------ */
+.queue-list { display: flex; flex-direction: column; gap: 2px; }
+.queue-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+  color: var(--text-primary); text-decoration: none; transition: background .12s;
+}
+.queue-item:hover { background: var(--bg-elevated); }
+.queue-server { color: var(--text-secondary); min-width: 90px; }
+.queue-item-name { flex: 1; font-size: 14.5px; }
+.queue-item-name .mono { color: var(--text-muted); margin-right: 6px; }
 
 /* ---------- Modal ------------------------------------------------------------------------- */
 .modal-overlay {
@@ -689,7 +881,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .review-stat-label { font-size: 14.5px; color: var(--text-muted); font-weight: 600; }
 .review-stat-value { font-family: var(--font-ui); font-size: 46px; font-weight: 800; letter-spacing: -.015em; line-height: 1; }
 .review-stat-value small { font-size: 16.5px; color: var(--text-secondary); font-weight: 400; margin-left: 2px; }
-.review-stat-value.pulse { animation: review-pulse .5s cubic-bezier(.22,1,.36,1); }
+.review-stat-value.pulse, .kpi-value.pulse { animation: review-pulse .5s cubic-bezier(.22,1,.36,1); }
 @keyframes review-pulse { 0% { opacity: .45; transform: translateY(3px); } 100% { opacity: 1; transform: translateY(0); } }
 .review-stat-divider { width: 1px; height: 48px; background: var(--border); flex-shrink: 0; }
 

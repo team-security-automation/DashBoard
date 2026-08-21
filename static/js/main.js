@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // 행 전체 클릭 이동 (서버 관리 목록 등) - 안의 링크/버튼/폼을 누른 거면 그쪽
+  // 자체 동작(수정/삭제 등)이 우선이라 이동시키지 않는다.
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('.row-clickable[data-href]');
+    if (!target) return;
+    if (e.target.closest('a, button, form')) return;
+    window.location.href = target.dataset.href;
+  });
+
   // 플래시 메시지 자동 사라짐
   document.querySelectorAll('.flash').forEach((el) => {
     setTimeout(() => {

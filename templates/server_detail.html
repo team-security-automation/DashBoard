@@ -11,10 +11,22 @@
 
 {% block content %}
 <section class="detail-head">
-  <div class="panel score-panel reveal">
-    <div class="kpi-label">보안 수준</div>
-    <div class="kpi-value kpi-value-lg">{{ level }}<small>/100</small></div>
-    <span class="pill pill-{{ color }}">{{ grade }}</span>
+  <div class="score-panel-stack">
+    <div class="panel score-panel reveal">
+      <div class="kpi-label">보안 수준 <span class="kpi-label-hint" title="양호/취약 확정 항목 + 수동확인(미판정 시 취약과 동일하게 감점) 전부 반영">수동확인 반영</span></div>
+      <div class="kpi-value kpi-value-lg"><span id="scoreValue">{{ level }}</span><small>/100</small></div>
+      <span class="pill pill-{{ color }}" id="scoreGradePill">{{ grade }}</span>
+    </div>
+    <div class="panel score-panel reveal">
+      <div class="kpi-label">자동 진단 결과만 <span class="kpi-label-hint" title="수동확인 항목은 아직 사람이 안 봤으니 N/A처럼 분모에서 제외하고 계산 - 양호/취약이 자동으로 확정된 항목만 반영">수동확인 제외</span></div>
+      <div class="kpi-value kpi-value-lg">{{ auto_level }}<small>/100</small></div>
+      <span class="pill pill-{{ auto_color }}">{{ auto_grade }}</span>
+      {% if manual_pending %}
+        <span class="score-sub-note">수동확인 {{ manual_pending }}건 미판정 - 판정 끝나면 위 점수와 같아짐</span>
+      {% else %}
+        <span class="score-sub-note">수동확인 대상 없음 - 위 점수와 동일</span>
+      {% endif %}
+    </div>
   </div>
   <div class="panel meta-panel reveal">
     <div class="meta-grid">
@@ -26,6 +38,258 @@
     </div>
   </div>
 </section>
+
+{% set drawer_ids = {'수동확인 항목': 'drawer-0', '승인 요청': 'drawer-1', '조치하기': 'drawer-2'} %}
+{% set has_summary = summary['수동확인 항목'] or summary['승인 요청'] or summary['조치하기'] %}
+<section class="panel reveal status-summary">
+  <div class="panel-title"><span>지금 처리할 것</span><span class="panel-title-sub">칩을 클릭하면 표의 해당 행으로 이동, "일괄 처리"는 오른쪽 패널에서 한 번에 처리합니다</span></div>
+  <div class="status-summary-groups">
+    <div class="status-summary-group">
+      {% set manual_review_items = summary['수동확인 항목'] %}
+      <span class="status-summary-label status-summary-label-{{ 'warn' if manual_review_items else 'good' }}">수동확인 항목 {{ manual_review_items|length }}건</span>
+      {% if manual_review_items %}
+        {% if current_user.role == 'admin' %}
+        <button type="button" class="btn btn-ghost btn-xs bulk-drawer-open" data-drawer="{{ drawer_ids['수동확인 항목'] }}">일괄 처리 ›</button>
+        {% endif %}
+        <div class="status-summary-chips">
+          {% for ci in manual_review_items %}
+          <a class="status-summary-chip" href="#item-{{ ci.code }}"><span class="mono">{{ ci.code }}</span> {{ ci.name }}</a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <span class="status-summary-empty">수동확인 필요한 항목이 없습니다.</span>
+      {% endif %}
+    </div>
+    {% for kind, items in summary.items() %}
+      {% if items and kind != '수동확인 항목' %}
+      <div class="status-summary-group">
+        <span class="status-summary-label status-summary-label-accent">{{ kind }} {{ items|length }}건</span>
+        {% if current_user.role == 'admin' %}
+        <button type="button" class="btn btn-ghost btn-xs bulk-drawer-open" data-drawer="{{ drawer_ids[kind] }}">일괄 처리 ›</button>
+        {% endif %}
+        <div class="status-summary-chips">
+          {% for ci in items %}
+          <a class="status-summary-chip" href="#item-{{ ci.code }}"><span class="mono">{{ ci.code }}</span> {{ ci.name }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+
+{% if has_summary %}
+
+<div class="side-drawer-overlay" id="bulkDrawerOverlay">
+  <div class="side-drawer">
+    <div class="side-drawer-head">
+      <h3 id="bulkDrawerTitle"></h3>
+      <button type="button" class="btn btn-ghost btn-xs" id="bulkDrawerClose">닫기</button>
+    </div>
+    <div class="side-drawer-body">
+
+      {# drawer-0: 수동확인 항목 - 일괄 양호/취약 판정 #}
+      <div class="bulk-drawer-panel" id="drawer-0" data-title="수동확인 항목 {{ summary['수동확인 항목']|length }}건 - 일괄 판정">
+        <form method="post" action="{{ url_for('review.bulk_decide') }}" class="bulk-drawer-form">
+          <input type="hidden" name="next" value="">
+          <label class="bulk-drawer-selectall"><input type="checkbox" class="bulk-select-all" checked> 전체 선택</label>
+          {% set ns = namespace(cat='') %}
+          {% for r in manual_pending_pairs %}
+            {% if r.check_item.category != ns.cat %}
+              {% if not loop.first %}</div>{% endif %}
+              {% set ns.cat = r.check_item.category %}
+              <div class="bulk-drawer-cat"><div class="bulk-drawer-cat-name">{{ ns.cat }}</div>
+            {% endif %}
+            <label class="bulk-drawer-item">
+              <input type="checkbox" name="scan_result_ids" value="{{ r.id }}" checked>
+              <span class="mono">{{ r.check_item.code }}</span> {{ r.check_item.name }}
+            </label>
+            {% if loop.last %}</div>{% endif %}
+          {% endfor %}
+          <div class="bulk-drawer-actions">
+            <button type="submit" name="result" value="양호" class="btn btn-approve btn-sm">선택 전부 양호로 판정</button>
+            <button type="submit" name="result" value="취약" class="btn btn-danger btn-sm">선택 전부 취약으로 판정</button>
+          </div>
+        </form>
+      </div>
+
+      {# drawer-1: 승인 요청 - "아직 승인이 안 끝난" 전부 (요청 전 / 대기중 / 거부됨).
+         승인자의 결정을 기다리는 단계라 조치 화면(drawer-2)엔 안 보인다. 자동/수동을
+         각 상태 안에서 접힌 토글(details)로 나눠서 - 열자마자는 제목만 보이고,
+         필요한 쪽만 펼쳐서 보게 한다 (빽빽함 완화 + 자동/수동 구분 둘 다 해결). #}
+      <div class="bulk-drawer-panel" id="drawer-1" data-title="승인 요청 {{ summary['승인 요청']|length }}건">
+        {% set to_request_auto = drawer_data['auto']['to_request'] %}
+        {% set to_request_manual = drawer_data['manual']['to_request'] %}
+        {% if to_request_auto or to_request_manual %}
+        <div class="bulk-drawer-subhead">승인 요청 전 ({{ (to_request_auto|length) + (to_request_manual|length) }}건)</div>
+        {% if to_request_auto %}
+        <details class="bulk-drawer-toggle">
+          <summary>자동 조치 ({{ to_request_auto|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            <form method="post" action="{{ url_for('approvals.bulk_create') }}" class="bulk-drawer-form">
+              <input type="hidden" name="next" value="">
+              <label class="bulk-drawer-selectall"><input type="checkbox" class="bulk-select-all" checked> 전체 선택</label>
+              {% for ci in to_request_auto %}
+              <label class="bulk-drawer-item">
+                <input type="checkbox" name="items" value="{{ server.id }}:{{ ci.id }}" checked>
+                <span class="mono">{{ ci.code }}</span> {{ ci.name }}
+              </label>
+              {% endfor %}
+              <div class="bulk-drawer-actions">
+                <button type="submit" class="btn btn-approve btn-sm">선택 항목 승인 요청 보내기</button>
+              </div>
+            </form>
+          </div>
+        </details>
+        {% endif %}
+        {% if to_request_manual %}
+        <details class="bulk-drawer-toggle">
+          <summary>수동 조치 ({{ to_request_manual|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            {% for ci in to_request_manual %}
+            <form method="post" action="{{ url_for('approvals.create') }}" class="action-mini-form action-mini-form-block">
+              <input type="hidden" name="server_id" value="{{ server.id }}">
+              <input type="hidden" name="check_item_id" value="{{ ci.id }}">
+              <input type="hidden" name="next" value="">
+              <span class="mono">{{ ci.code }}</span> {{ ci.name }}
+              <input type="text" name="plan_note" class="decide-input" placeholder="조치 계획" required>
+              <button type="submit" class="btn btn-approve btn-xs">승인 요청</button>
+            </form>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        {% endif %}
+
+        {% set pending_auto = drawer_data['auto']['pending'] %}
+        {% set pending_manual = drawer_data['manual']['pending'] %}
+        {% if pending_auto or pending_manual %}
+        <div class="bulk-drawer-subhead">승인 대기중 ({{ (pending_auto|length) + (pending_manual|length) }}건) - 승인자 처리 대기</div>
+        {% if pending_auto %}
+        <details class="bulk-drawer-toggle">
+          <summary>자동 조치 ({{ pending_auto|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            <div class="bulk-drawer-readonly">
+              {% for ci in pending_auto %}
+              <a class="status-summary-chip" href="#item-{{ ci.code }}"><span class="mono">{{ ci.code }}</span> {{ ci.name }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
+        {% endif %}
+        {% if pending_manual %}
+        <details class="bulk-drawer-toggle">
+          <summary>수동 조치 ({{ pending_manual|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            <div class="bulk-drawer-readonly">
+              {% for ci in pending_manual %}
+              <a class="status-summary-chip" href="#item-{{ ci.code }}"><span class="mono">{{ ci.code }}</span> {{ ci.name }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
+        {% endif %}
+        {% endif %}
+
+        {% set rejected_auto = drawer_data['auto']['rejected'] %}
+        {% set rejected_manual = drawer_data['manual']['rejected'] %}
+        {% if rejected_auto or rejected_manual %}
+        <div class="bulk-drawer-subhead">거부됨 ({{ (rejected_auto|length) + (rejected_manual|length) }}건) - 아래에서 바로 재요청</div>
+        {% if rejected_auto %}
+        <details class="bulk-drawer-toggle">
+          <summary>자동 조치 ({{ rejected_auto|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            {% for ci, ar in rejected_auto %}
+            <form method="post" action="{{ url_for('approvals.create') }}" class="action-mini-form action-mini-form-block" title="거부 사유: {{ ar.reject_reason }}">
+              <input type="hidden" name="server_id" value="{{ server.id }}">
+              <input type="hidden" name="check_item_id" value="{{ ci.id }}">
+              <input type="hidden" name="next" value="">
+              <span class="mono">{{ ci.code }}</span> {{ ci.name }} <span class="text-muted">(거부: {{ ar.reject_reason }})</span>
+              <button type="submit" class="btn btn-approve btn-xs">재요청</button>
+            </form>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        {% if rejected_manual %}
+        <details class="bulk-drawer-toggle">
+          <summary>수동 조치 ({{ rejected_manual|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            {% for ci, ar in rejected_manual %}
+            <form method="post" action="{{ url_for('approvals.create') }}" class="action-mini-form action-mini-form-block" title="거부 사유: {{ ar.reject_reason }}">
+              <input type="hidden" name="server_id" value="{{ server.id }}">
+              <input type="hidden" name="check_item_id" value="{{ ci.id }}">
+              <input type="hidden" name="next" value="">
+              <span class="mono">{{ ci.code }}</span> {{ ci.name }} <span class="text-muted">(거부: {{ ar.reject_reason }})</span>
+              <input type="text" name="plan_note" class="decide-input" placeholder="조치 계획" required>
+              <button type="submit" class="btn btn-approve btn-xs">재요청</button>
+            </form>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        {% endif %}
+
+        {% if not to_request_auto and not to_request_manual and not pending_auto and not pending_manual
+           and not rejected_auto and not rejected_manual %}
+        <p class="empty-note">승인 대기 중인 항목이 없습니다.</p>
+        {% endif %}
+      </div>
+
+      {# drawer-2: 조치하기 - 승인이 끝난(approved) 것만. 자동조치는 승인 전엔 이
+         화면에 아예 나타나지 않는다 - "승인 받아야 조치 버튼이 활성화된다"는 걸
+         화면 자체를 분리해서 보여준다. 자동/수동도 접힌 토글로 나눈다. #}
+      <div class="bulk-drawer-panel" id="drawer-2" data-title="조치하기 {{ summary['조치하기']|length }}건">
+        {% set auto_ready = drawer_data['auto']['ready'] %}
+        {% set manual_ready = drawer_data['manual']['ready'] %}
+
+        {% if auto_ready %}
+        <details class="bulk-drawer-toggle">
+          <summary>자동조치 실행 대기 ({{ auto_ready|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            <form method="post" action="{{ url_for('approvals.bulk_execute') }}" class="bulk-drawer-form">
+              <input type="hidden" name="next" value="">
+              <label class="bulk-drawer-selectall"><input type="checkbox" class="bulk-select-all" checked> 전체 선택</label>
+              {% for ci, ar in auto_ready %}
+              <label class="bulk-drawer-item">
+                <input type="checkbox" name="req_ids" value="{{ ar.id }}" checked>
+                <span class="mono">{{ ci.code }}</span> {{ ci.name }}
+              </label>
+              {% endfor %}
+              <div class="bulk-drawer-actions">
+                <button type="submit" class="btn btn-approve btn-sm"
+                        onclick="return confirm('선택한 자동 조치를 실행할까요? 백업 후 설정을 변경하고 재진단까지 진행됩니다.');">선택 자동 조치 실행</button>
+              </div>
+            </form>
+          </div>
+        </details>
+        {% endif %}
+
+        {% if manual_ready %}
+        <details class="bulk-drawer-toggle">
+          <summary>수동조치 완료 처리 대기 ({{ manual_ready|length }}건)</summary>
+          <div class="bulk-drawer-toggle-body">
+            {% for ci, ar in manual_ready %}
+            <form method="post" action="{{ url_for('approvals.complete_manual', req_id=ar.id) }}" class="action-mini-form action-mini-form-block" title="조치 계획: {{ ar.diff_after }}">
+              <input type="hidden" name="next" value="">
+              <span class="mono">{{ ci.code }}</span> {{ ci.name }}
+              <input type="text" name="work_note" class="decide-input" placeholder="무엇을/어떻게 조치했는지" required>
+              <button type="submit" class="btn btn-approve btn-xs">완료 처리</button>
+            </form>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+
+        {% if not auto_ready and not manual_ready %}
+        <p class="empty-note">지금 조치할 항목이 없습니다. 먼저 승인을 받아야 여기 나타납니다.</p>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <section class="panel">
   <form method="get" class="filter-bar">
@@ -72,47 +336,119 @@
       </summary>
       <div class="cat-accordion-body">
         <div class="table-scroll">
-        <table class="data data-compact">
+        <table class="data data-compact results-table">
           <thead>
             <tr>
               <th>코드</th><th>점검항목</th><th>위험도</th><th>배점</th>
-              <th>진단결과</th><th>현재설정 / 조치권고</th><th></th>
+              <th>진단결과</th><th>현재설정 / 조치권고</th><th>승인 / 조치</th>
             </tr>
           </thead>
           <tbody>
             {% for r in g.rows %}
             {% set ci = r.check_item %}
-            <tr id="item-{{ ci.code }}" class="{{ 'row-flagged' if f_q and f_q.upper() == ci.code else '' }}">
+            {% set ar = approval_map.get(ci.id) %}
+            {% set this_url = request.url %}
+            <tr id="item-{{ ci.code }}" class="{{ 'row-flagged' if f_q and f_q.upper() == ci.code else '' }}" data-scan-result-id="{{ r.id }}">
               <td class="mono">{{ ci.code }}</td>
               <td>{{ ci.name }}</td>
               <td><span class="pill pill-risk-{{ ci.risk_level }} pill-xs">{{ RISK_LABEL.get(ci.risk_level, ci.risk_level) }}</span></td>
               <td class="mono">{{ ci.weight }}</td>
-              <td>
+              <td class="row-result-cell">
                 {% if r.result == '취약' %}<span class="pill pill-vuln">취약</span>
                 {% elif r.result == '수동확인' %}<span class="pill pill-manual">수동 조치 필요</span>
                 {% elif r.result == 'N/A' %}<span class="pill pill-warn">N/A</span>
                 {% else %}<span class="pill pill-good">양호</span>{% endif %}
               </td>
               <td class="detail-text">
-                {% if r.result in ('취약', '수동확인') %}
-                  <div class="detail-current">{{ r.current_setting }}</div>
-                  <div class="detail-reco">{{ r.recommendation }}</div>
+                {# 취약/수동확인일 때만 보여주던 걸 없앴다 - 양호 항목도 스크립트가
+                   current_setting/recommendation을 같이 보내서(예: "wheel 그룹원 1명 / 3명
+                   이하") 실제로 뭐가 어떻게 설정돼 있어서 양호인지 근거가 있는데 숨겨져 있었다. #}
+                {% if r.current_setting or r.recommendation %}
+                  {% if r.current_setting %}<div class="detail-current {{ 'detail-current-ok' if r.result == '양호' else '' }}">{{ r.current_setting }}</div>{% endif %}
+                  {% if r.recommendation %}<div class="detail-reco">{{ r.recommendation }}</div>{% endif %}
                 {% else %}
                   <span class="text-muted">-</span>
                 {% endif %}
               </td>
               <td>
-                {% if r.result in ('취약', '수동확인') and current_user.role == 'admin' %}
-                  {% if ci.id in pending_map %}
-                    <a class="btn btn-ghost btn-xs" href="{{ url_for('approvals.detail', req_id=pending_map[ci.id]) }}">승인대기중</a>
-                  {% else %}
-                    <form method="post" action="{{ url_for('approvals.create') }}">
-                      <input type="hidden" name="server_id" value="{{ server.id }}">
-                      <input type="hidden" name="check_item_id" value="{{ ci.id }}">
-                      <button class="btn btn-approve btn-xs" type="submit">조치 승인 요청</button>
-                    </form>
-                  {% endif %}
+              <div class="approval-cell">
+                {# 승인상태 배지 + 지금 누를 수 있는 액션을 한 칸에 세로로 묶는다 - 예전엔 컬럼을
+                   나눠뒀는데, 배지 없는 행("-")들 때문에 컬럼 폭이 들쭉날쭉 잡혀서 다음 컬럼
+                   내용이 넘치거나 붕 떠 보이는 문제가 있었다. 배지 글자는 짧게 유지하고
+                   (거부사유/전후점수처럼 긴 내용은 title 툴팁으로만) 한 덩어리로 묶어서 해결. #}
+                {% if ar %}
+                  {% if ar.status == 'pending' %}<span class="badge badge-warn">승인 대기중</span>
+                  {% elif ar.status == 'rejected' %}<span class="badge badge-vuln" title="거부 사유: {{ ar.reject_reason }}">거부됨</span>
+                  {% elif ar.status == 'approved' and ar.executed_at %}<span class="badge badge-good" title="{{ ar.before_score }}점 → {{ ar.after_score }}점">완료</span>
+                  {% elif ar.status == 'approved' and ar.remediation_type == 'auto' %}<span class="badge badge-accent">실행 대기</span>
+                  {% elif ar.status == 'approved' %}<span class="badge badge-accent">수동조치 대기</span>{% endif %}
                 {% endif %}
+                {# 1) 수동확인 - 실무자가 그 자리에서 바로 양호/취약 판정 (승인요청 없이 즉시 처리, /review와 동일 로직) #}
+                {% if r.result == '수동확인' and (ar is none or ar.status == 'rejected') and current_user.can_run_diagnosis() %}
+                  <span class="quick-judge">
+                    <button type="button" class="btn btn-approve btn-xs quick-judge-btn" data-outcome="양호">양호</button>
+                    <button type="button" class="btn btn-danger btn-xs quick-judge-btn" data-outcome="취약">취약</button>
+                  </span>
+                {% endif %}
+
+                {# 2) 승인요청 전(신규 또는 거부 이후 재요청) #}
+                {% if r.result in ('취약', '수동확인') and (ar is none or ar.status == 'rejected') and current_user.role == 'admin' %}
+                  <form method="post" action="{{ url_for('approvals.create') }}" class="inline-form">
+                    <input type="hidden" name="server_id" value="{{ server.id }}">
+                    <input type="hidden" name="check_item_id" value="{{ ci.id }}">
+                    <input type="hidden" name="next" value="{{ this_url }}">
+                    <button class="btn btn-approve btn-xs" type="submit">조치 승인 요청</button>
+                  </form>
+                {% endif %}
+
+                {# 3) 승인 대기중 - 승인자면 그 자리에서 바로 승인/거부 #}
+                {% if ar and ar.status == 'pending' and current_user.can_decide_approval() %}
+                  <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="decide-form inline-form">
+                    <input type="hidden" name="action" value="approve">
+                    <input type="hidden" name="next" value="{{ this_url }}">
+                    <button type="button" class="btn btn-approve btn-xs decide-open">승인</button>
+                    <span class="decide-inline">
+                      <input type="text" name="note" class="decide-input" placeholder="참고 메모 (선택)">
+                      <button type="submit" class="btn btn-approve btn-xs">확인</button>
+                      <button type="button" class="btn btn-ghost btn-xs decide-cancel">취소</button>
+                    </span>
+                  </form>
+                  <form method="post" action="{{ url_for('approvals.decide', req_id=ar.id) }}" class="decide-form inline-form">
+                    <input type="hidden" name="action" value="reject">
+                    <input type="hidden" name="next" value="{{ this_url }}">
+                    <button type="button" class="btn btn-danger btn-xs decide-open">거부</button>
+                    <span class="decide-inline">
+                      <input type="text" name="reason" class="decide-input" placeholder="거부 사유" required>
+                      <button type="submit" class="btn btn-danger btn-xs">확인</button>
+                      <button type="button" class="btn btn-ghost btn-xs decide-cancel">취소</button>
+                    </span>
+                  </form>
+                {% endif %}
+
+                {# 4) 승인됨 + 자동조치 미실행 - 실무자가 바로 실행 #}
+                {% if ar and ar.status == 'approved' and ar.remediation_type == 'auto' and not ar.executed_at and current_user.role == 'admin' %}
+                  <form method="post" action="{{ url_for('approvals.execute', req_id=ar.id) }}" class="inline-form"
+                        onsubmit="return confirm('자동 조치를 실행할까요? 백업 후 설정을 변경하고 재진단까지 진행됩니다.');">
+                    <input type="hidden" name="next" value="{{ this_url }}">
+                    <button class="btn btn-approve btn-xs" type="submit">자동 조치 실행</button>
+                  </form>
+                {% endif %}
+
+                {# 5) 승인됨 + 수동조치 미실행 - 실무자가 조치 내용 남기고 완료 처리 #}
+                {% if ar and ar.status == 'approved' and ar.remediation_type == 'manual' and not ar.executed_at and current_user.role == 'admin' %}
+                  <form method="post" action="{{ url_for('approvals.complete_manual', req_id=ar.id) }}" class="decide-form inline-form">
+                    <input type="hidden" name="next" value="{{ this_url }}">
+                    <button type="button" class="btn btn-approve btn-xs decide-open">완료 처리</button>
+                    <span class="decide-inline">
+                      <input type="text" name="work_note" class="decide-input" placeholder="무엇을/어떻게 조치했는지" required>
+                      <button type="submit" class="btn btn-approve btn-xs">확인</button>
+                      <button type="button" class="btn btn-ghost btn-xs decide-cancel">취소</button>
+                    </span>
+                  </form>
+                {% endif %}
+
+                {% if not ar and r.result not in ('취약', '수동확인') %}<span class="text-muted">-</span>{% endif %}
+              </div>
               </td>
             </tr>
             {% endfor %}
@@ -136,4 +472,134 @@
   if (target) target.scrollIntoView({behavior:'instant', block:'center'});
 </script>
 {% endif %}
+<script>
+  // "지금 처리할 것" 칩 클릭이나, 액션 후 되돌아온 #item-U-01 앵커나 - 둘 다 그 행이
+  // 어느 카테고리 아코디언 안에 접혀있을 수 있으니 먼저 펼치고, 잠깐 강조 표시한다.
+  function jumpToAnchor() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id) return;
+    const row = document.getElementById(id);
+    if (!row) return;
+    const details = row.closest('details.cat-accordion');
+    if (details) details.open = true;
+    row.scrollIntoView({ behavior: 'instant', block: 'center' });
+    row.classList.add('row-flagged');
+    setTimeout(() => row.classList.remove('row-flagged'), 2200);
+  }
+  window.addEventListener('DOMContentLoaded', jumpToAnchor);
+  window.addEventListener('hashchange', jumpToAnchor);
+</script>
+<script>
+  // "지금 처리할 것" 패널의 "일괄 처리" 버튼 - 오른쪽 드로어를 열어서 체크박스로
+  // 고른 항목들을 한 번에 판정/승인요청 보낸다 (스크롤해서 표에서 하나씩 누를
+  // 필요 없이).
+  (function () {
+    const overlay = document.getElementById('bulkDrawerOverlay');
+    if (!overlay) return;
+    const titleEl = document.getElementById('bulkDrawerTitle');
+    const closeBtn = document.getElementById('bulkDrawerClose');
+    const panels = overlay.querySelectorAll('.bulk-drawer-panel');
+    const backUrl = window.location.pathname + window.location.search;
+
+    // 드로어에서 제출한 폼도 액션 후 이 페이지로 돌아오게 next를 채워둔다.
+    overlay.querySelectorAll('input[name="next"]').forEach((input) => { input.value = backUrl; });
+
+    document.querySelectorAll('.bulk-drawer-open').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.drawer;
+        panels.forEach((p) => { p.classList.toggle('active', p.id === targetId); });
+        const active = overlay.querySelector('.bulk-drawer-panel.active');
+        titleEl.textContent = active ? active.dataset.title : '';
+        overlay.classList.add('open');
+      });
+    });
+
+    function close() { overlay.classList.remove('open'); }
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    // 패널 하나에 전체선택 체크박스가 여러 개 있을 수 있다(자동조치 요청용/실행용
+    // 각각) - data-target-form이 있으면 그 폼에 form="" 속성으로 연결된 체크박스만,
+    // 없으면(예: 수동확인 판정처럼 패널 안에 폼이 하나뿐인 경우) 패널 안의 체크박스
+    // 전부를 대상으로 한다. disabled(아직 승인 안 된) 체크박스는 건드리지 않는다.
+    overlay.querySelectorAll('.bulk-select-all').forEach((selectAll) => {
+      const targetForm = selectAll.dataset.targetForm;
+      const checks = targetForm
+        ? overlay.querySelectorAll(`input[type=checkbox][form="${targetForm}"]`)
+        : selectAll.closest('.bulk-drawer-panel').querySelectorAll('input[type=checkbox]:not(.bulk-select-all)');
+      selectAll.addEventListener('change', () => {
+        checks.forEach((c) => { if (!c.disabled) c.checked = selectAll.checked; });
+      });
+    });
+  })();
+</script>
+<script>
+  // 승인요청/승인/거부/실행 등 인라인 액션 버튼을 누르면 서버가 그 항목이 있던
+  // 바로 이 페이지로 되돌려주는데(next 필드), Jinja가 서버에서 만드는 URL에는
+  // #item-U-01 같은 앵커가 안 붙는다(브라우저가 #뒤는 서버로 아예 안 보내서).
+  // 그래서 매번 스크롤이 맨 위로 튀었다 - 각 행의 next 값을 페이지 로드 시점에
+  // 그 행 앵커를 붙여서 채워두면, 리다이렉트 응답의 Location에 #이 그대로
+  // 남아있어서 브라우저가 알아서 그 행으로 스크롤해준다 (별도 JS 스크롤 불필요).
+  document.querySelectorAll('.results-table tr[id^="item-"]').forEach((tr) => {
+    const anchoredUrl = window.location.pathname + window.location.search + '#' + tr.id;
+    tr.querySelectorAll('input[name="next"]').forEach((input) => { input.value = anchoredUrl; });
+  });
+</script>
+<script>
+  (function () {
+    const scoreValueEl = document.getElementById('scoreValue');
+    const scoreGradeEl = document.getElementById('scoreGradePill');
+    if (!scoreValueEl) return;
+
+    function tweenScore(from, to) {
+      const duration = 550;
+      const start = performance.now();
+      scoreValueEl.parentElement.classList.add('pulse');
+      setTimeout(() => scoreValueEl.parentElement.classList.remove('pulse'), duration);
+      function frame(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        scoreValueEl.textContent = Math.round(from + (to - from) * eased);
+        if (t < 1) requestAnimationFrame(frame);
+        else scoreValueEl.textContent = Math.round(to);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // 진단결과 표 안에서 "수동확인" 항목을 승인요청 없이 그 자리에서 바로 양호/취약
+    // 판정한다 (/review 페이지와 동일한 API, 이 서버 점수 변화를 바로 위에서 보여줌).
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.quick-judge-btn');
+      if (!btn) return;
+      const row = btn.closest('tr[data-scan-result-id]');
+      const scanResultId = row.dataset.scanResultId;
+      const outcome = btn.dataset.outcome;
+      row.querySelectorAll('.quick-judge-btn').forEach((b) => (b.disabled = true));
+
+      try {
+        const res = await fetch(`/review/${scanResultId}/decide`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ result: outcome }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || '처리 실패');
+
+        const resultCell = row.querySelector('.row-result-cell');
+        resultCell.innerHTML = outcome === '취약'
+          ? '<span class="pill pill-vuln">취약</span>'
+          : '<span class="pill pill-good">양호</span>';
+        row.querySelector('.quick-judge').remove();
+
+        tweenScore(data.server_level_before, data.server_level_after);
+        if (scoreGradeEl) {
+          scoreGradeEl.textContent = data.server_grade_after;
+          scoreGradeEl.className = `pill pill-${data.server_color_after}`;
+        }
+      } catch (err) {
+        row.querySelectorAll('.quick-judge-btn').forEach((b) => (b.disabled = false));
+      }
+    });
+  })();
+</script>
 {% endblock %}

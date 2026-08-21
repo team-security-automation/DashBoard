@@ -57,13 +57,20 @@
           // 예전엔 완료되면 0.9초 뒤 조용히 초기 화면으로 새로고침해서
           // "다 됐는지도 모르게 사라진다"는 문제가 있었다. 이제는 결과 요약을
           // 화면에 그대로 남겨두고, 사용자가 확인 버튼을 눌러야 새로고침한다.
+          // "결과 보러가는 과정이 어색하다"는 피드백대로, 방금 진단한 서버로 바로
+          // 들어가는 링크를 여기서 직접 만들어준다 (대시보드로 보내고 거기서 다시
+          // 서버를 찾아 들어가야 하는 우회 없이).
           if (doneBox) {
             doneBox.style.display = 'block';
+            const links = data.server_links || [];
+            const linksHtml = links.length === 1
+              ? `<a href="/servers/${links[0].id}" class="btn btn-primary btn-sm">${links[0].hostname} 결과 보기</a>`
+              : links.map((s) => `<a href="/servers/${s.id}" class="btn btn-ghost btn-sm">${s.hostname}</a>`).join(' ');
             doneBox.innerHTML = `
               <p><strong>${ok}대 성공${fail ? `, ${fail}대 실패` : ''}</strong> — 진단 결과가 저장되었습니다.</p>
-              <div class="form-actions" style="border-top:none; padding-top:0">
-                <a href="/" class="btn btn-ghost btn-sm">대시보드에서 보기</a>
-                <button type="button" class="btn btn-primary btn-sm" id="progressDoneOk">확인</button>
+              <div class="form-actions" style="border-top:none; padding-top:0; flex-wrap:wrap">
+                ${linksHtml}
+                <button type="button" class="btn btn-ghost btn-sm" id="progressDoneOk">닫기</button>
               </div>`;
             document.getElementById('progressDoneOk').addEventListener('click', () => {
               window.location.href = window.location.pathname;

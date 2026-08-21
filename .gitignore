@@ -10,3 +10,4 @@ instance/
 # 그대로 두되(대시보드가 실행 시 이 경로를 읽음) 커밋만 안 함.
 ansible/
 scan_results/*.json
+fix_results/*.json

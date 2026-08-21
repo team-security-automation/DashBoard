@@ -52,13 +52,22 @@ def create_app(config_class=Config):
 
     @app.context_processor
     def inject_globals():
+        # 사이드바 "진단·조치" 배지 - 역할마다 처리할 게 다르다: 실무자는 수동확인+
+        # 실행/완료처리 대기, 승인자는 승인 대기. diagnosis.index()의 "처리할 항목"
+        # 큐와 같은 개념을 세자면 매 페이지 로드마다 승인요청 전체를 훑어 최신건만
+        # 골라야 해서(무겁다), 배지는 간단 집계만 쓰고 정확한 중복 제거는 큐 화면
+        # 자체에서 한다.
         pending_count = 0
         manual_review_count = 0
         if getattr(current_user, "is_authenticated", False):
             from models import ApprovalRequest
             from blueprints.review import pending_manual_count
-            pending_count = ApprovalRequest.query.filter_by(status="pending").count()
-            manual_review_count = pending_manual_count()
+            if current_user.can_decide_approval():
+                pending_count = ApprovalRequest.query.filter_by(status="pending").count()
+            if current_user.can_run_diagnosis():
+                manual_review_count = pending_manual_count() + (
+                    ApprovalRequest.query.filter_by(status="approved", executed_at=None).count()
+                )
         return dict(RISK_LABEL=RISK_LABEL, pending_count=pending_count,
                     manual_review_count=manual_review_count)
 

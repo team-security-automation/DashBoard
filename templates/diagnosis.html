@@ -4,12 +4,35 @@
 
 {% block content %}
 <section class="stack-col">
+  {% if queue %}
+  <div class="panel reveal">
+    <div class="panel-title">
+      <span>처리할 항목</span><span class="panel-title-sub">{{ queue|length }}건 - 클릭하면 서버 상세로 이동해 바로 처리합니다</span>
+      {% if current_user.can_decide_approval() %}
+      <a class="btn btn-ghost btn-xs" style="margin-left:auto" href="{{ url_for('approvals.list_approvals') }}">전체 승인 목록(여러 건 한번에) ›</a>
+      {% elif current_user.can_run_diagnosis() %}
+      <a class="btn btn-ghost btn-xs" style="margin-left:auto" href="{{ url_for('review.index') }}">전체 수동확인 화면 ›</a>
+      {% endif %}
+    </div>
+    <div class="queue-list">
+      {% for q in queue %}
+      <a class="queue-item" href="{{ url_for('servers.server_detail', server_id=q.server.id) }}#{{ q.anchor }}">
+        <span class="pill pill-{{ 'warn' if q.kind == '수동확인' else 'accent' }} pill-xs">{{ q.kind }}</span>
+        <span class="mono queue-server">{{ q.server.hostname }}</span>
+        <span class="queue-item-name"><span class="mono">{{ q.ci.code }}</span> {{ q.ci.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# 진단 실행/실행이력은 실무자(관리자) 전용 - 승인자는 여기 볼 이유가 없다 (진단을
+     실행할 수도 없는데 폼/서버목록/이력표까지 다 보이던 게 승인자 입장에선 그냥
+     쓸모없는 화면 차지였다). 승인자는 위 "처리할 항목" 큐가 곧 그들의 현황판이다. #}
+  {% if current_user.can_run_diagnosis() %}
   <div class="panel reveal">
     <div class="panel-title"><span>서버 선택 후 진단 실행</span></div>
 
-    {% if not current_user.can_run_diagnosis() %}
-      <p class="empty-note">진단 실행은 실무자(관리자) 권한이 필요합니다. (현재 권한: {{ current_user.role_label }})</p>
-    {% endif %}
     {% if missing_ssh %}
       <span class="mode-caption mode-warn" style="margin-bottom:14px">
         <span class="mode-dot"></span>
@@ -106,6 +129,7 @@
     </table>
     </div>
   </div>
+  {% endif %}
 
   <div class="modal-overlay" id="failModal">
     <div class="modal">

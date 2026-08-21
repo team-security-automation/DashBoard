@@ -9,7 +9,7 @@
 """
 from collections import OrderedDict
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from extensions import db
@@ -92,6 +92,39 @@ def index():
     )
 
 
+@review_bp.route("/bulk-decide", methods=["POST"])
+@login_required
+def bulk_decide():
+    """서버 상세 페이지의 "지금 처리할 것" 패널에서 수동확인 여러 건을 한 번에
+    양호/취약으로 판정한다. 한 건씩 처리하는 decide()(JSON, 즉시반영)와 달리
+    폼 POST로 받아서 처리 후 원래 페이지로 되돌아간다."""
+    next_url = request.form.get("next")
+    if not current_user.can_run_diagnosis():
+        flash("수동확인 판정은 실무자(관리자) 권한이 필요합니다.", "warning")
+        return redirect(next_url or url_for("review.index"))
+
+    ids = request.form.getlist("scan_result_ids", type=int)
+    outcome = request.form.get("result")
+    if not ids:
+        flash("선택된 항목이 없습니다.", "warning")
+        return redirect(next_url or url_for("review.index"))
+    if outcome not in ("양호", "취약"):
+        flash("잘못된 판정값입니다.", "warning")
+        return redirect(next_url or url_for("review.index"))
+
+    done = 0
+    for sr_id in ids:
+        sr = db.session.get(ScanResult, sr_id)
+        if sr is None or sr.result != "수동확인":
+            continue
+        sr.result = outcome
+        sr.score = item_score_value(sr.check_item.risk_level, outcome)
+        done += 1
+    db.session.commit()
+    flash(f"{done}건을 '{outcome}'(으)로 일괄 판정했습니다.", "success")
+    return redirect(next_url or url_for("review.index"))
+
+
 @review_bp.route("/<int:scan_result_id>/decide", methods=["POST"])
 @login_required
 def decide(scan_result_id):
@@ -106,9 +139,17 @@ def decide(scan_result_id):
     if outcome not in ("양호", "취약"):
         return jsonify(ok=False, error="잘못된 판정값입니다."), 400
 
+    server = sr.server
+    level_before, _, _, _ = calc_security_level(server.latest_results())
+
     sr.result = outcome
     sr.score = item_score_value(sr.check_item.risk_level, outcome)
     db.session.commit()
+
+    # 서버 상세 페이지(server_detail.html)에서 이 항목 하나를 판정했을 때 "이 서버"
+    # 점수가 얼마나 바뀌었는지 바로 보여주려면 전체 평균이 아니라 이 서버 기준 점수가
+    # 필요하다 (평균은 여러 서버에 묻혀서 체감이 안 됨 - /review 페이지는 계속 평균 사용).
+    level_after, grade_after, _, _ = calc_security_level(server.latest_results())
 
     avg_score, avg_grade = _overall_avg_score()
     return jsonify(
@@ -117,4 +158,9 @@ def decide(scan_result_id):
         avg_score=avg_score,
         avg_grade=avg_grade,
         avg_color=GRADE_COLOR.get(avg_grade, "warn"),
+        server_id=server.id,
+        server_level_before=level_before,
+        server_level_after=level_after,
+        server_grade_after=grade_after,
+        server_color_after=GRADE_COLOR.get(grade_after, "warn"),
     )

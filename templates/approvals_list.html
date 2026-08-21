@@ -12,10 +12,92 @@
 
 <div class="panel reveal">
   {% if reqs %}
+  {% set bulk_pending = status == 'pending' and current_user.can_decide_approval() %}
+  {% set bulk_execute = status == 'approved' and current_user.role == 'admin' %}
+  <form method="post" id="bulkForm"></form>
+
+  {% if bulk_pending %}
+  {% set pending_servers = [] %}
+  {% set pending_os = [] %}
+  {% for r in reqs %}
+    {% if r.server.hostname not in pending_servers %}{% set _ = pending_servers.append(r.server.hostname) %}{% endif %}
+    {% if r.server.os_family not in pending_os %}{% set _ = pending_os.append(r.server.os_family) %}{% endif %}
+  {% endfor %}
+  <div class="bulk-bar decide-form" id="bulkBar" style="display:none">
+    <span class="bulk-bar-actions">
+      <label class="bulk-quickpick">서버별 선택
+        <select id="quickPickServer">
+          <option value="">선택...</option>
+          {% for s in pending_servers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="bulk-quickpick">OS별 선택
+        <select id="quickPickOs">
+          <option value="">선택...</option>
+          {% for o in pending_os %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="button" class="btn btn-ghost btn-sm" id="bulkClear">선택 해제</button>
+    </span>
+    <span class="bulk-count mono" id="bulkCount">0건 선택됨</span>
+    <span class="bulk-bar-actions">
+      <button type="submit" form="bulkForm" formaction="{{ url_for('approvals.bulk_decide') }}"
+              name="action" value="approve" class="btn btn-approve btn-sm"
+              onclick="return confirm('선택한 항목을 일괄 승인할까요? 자동 조치 대상은 승인만 되고, 실무자가 따로 실행해야 합니다.');">
+        선택 승인
+      </button>
+      <button type="button" class="btn btn-danger btn-sm decide-open">선택 거부</button>
+      <span class="decide-inline">
+        <input type="text" name="reason" form="bulkForm" class="decide-input" placeholder="거부 사유 (선택한 항목 전체에 적용)">
+        <button type="submit" form="bulkForm" formaction="{{ url_for('approvals.bulk_decide') }}"
+                name="action" value="reject" class="btn btn-danger btn-sm">거부 확정</button>
+        <button type="button" class="btn btn-ghost btn-sm decide-cancel">취소</button>
+      </span>
+    </span>
+  </div>
+  {% elif bulk_execute %}
+  {% set exec_servers = [] %}
+  {% set exec_os = [] %}
+  {% for r in reqs %}
+    {% if r.remediation_type == 'auto' and not r.executed_at %}
+      {% if r.server.hostname not in exec_servers %}{% set _ = exec_servers.append(r.server.hostname) %}{% endif %}
+      {% if r.server.os_family not in exec_os %}{% set _ = exec_os.append(r.server.os_family) %}{% endif %}
+    {% endif %}
+  {% endfor %}
+  <div class="bulk-bar" id="bulkBar">
+    <span class="bulk-bar-actions">
+      <label class="bulk-quickpick">서버별 선택
+        <select id="quickPickServer">
+          <option value="">선택...</option>
+          {% for s in exec_servers %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="bulk-quickpick">OS별 선택
+        <select id="quickPickOs">
+          <option value="">선택...</option>
+          {% for o in exec_os %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="button" class="btn btn-ghost btn-sm" id="bulkClear">선택 해제</button>
+    </span>
+    <span class="bulk-bar-actions">
+      <span class="bulk-count mono" id="bulkCount">0건 선택됨</span>
+      <button type="submit" form="bulkForm" formaction="{{ url_for('approvals.bulk_execute') }}"
+              class="btn btn-approve btn-sm" id="bulkExecuteBtn" disabled
+              onclick="return confirm('선택한 자동 조치 항목을 일괄 실행할까요? 백업 후 설정을 변경하고 재진단까지 진행됩니다.');">
+        선택 자동 조치 실행
+      </button>
+    </span>
+  </div>
+  {% endif %}
+
   <div class="table-scroll">
   <table class="data data-compact">
     <thead>
       <tr>
+        <th class="col-narrow" style="width:34px">
+          {% if bulk_pending or bulk_execute %}<input type="checkbox" id="bulkSelectAll">{% endif %}
+        </th>
         <th class="col-narrow col-hide-sm">요청일시</th><th class="col-narrow">서버</th><th class="col-flex">항목</th>
         <th class="col-narrow">위험도</th><th class="col-narrow col-hide-sm">조치방식</th><th class="col-narrow col-hide-sm">요청자</th>
         <th class="col-narrow">상태</th><th class="col-narrow col-hide-sm">승인자</th><th class="col-narrow"></th>
@@ -23,7 +105,14 @@
     </thead>
     <tbody>
       {% for r in reqs %}
+      {% set row_eligible = bulk_pending or (bulk_execute and r.remediation_type == 'auto' and not r.executed_at) %}
       <tr>
+        <td class="col-narrow">
+          {% if row_eligible %}
+          <input type="checkbox" name="req_ids" value="{{ r.id }}" form="bulkForm" class="bulk-check"
+                 data-server="{{ r.server.hostname }}" data-os="{{ r.server.os_family }}">
+          {% endif %}
+        </td>
         <td class="col-narrow col-hide-sm mono">{{ (r.requested_at | kst).strftime('%Y-%m-%d %H:%M') }}</td>
         <td class="col-narrow mono">{{ r.server.hostname }}</td>
         <td class="col-flex" title="{{ r.check_item.code }} {{ r.check_item.name }}"><span class="mono">{{ r.check_item.code }}</span> {{ r.check_item.name }}</td>
@@ -78,4 +167,65 @@
   <p class="empty-note">해당 상태의 조치 승인 요청이 없습니다.</p>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const checks = Array.from(document.querySelectorAll('.bulk-check'));
+    if (!checks.length) return;
+
+    const bar = document.getElementById('bulkBar');
+    const count = document.getElementById('bulkCount');
+    const selectAll = document.getElementById('bulkSelectAll');
+    const execBtn = document.getElementById('bulkExecuteBtn');
+    // bulk_execute 화면(서버별/OS별 선택)에만 있는 요소들 - 대기중 화면에는 없음
+    const isExecuteBar = !!execBtn;
+
+    function refresh() {
+      const n = checks.filter((c) => c.checked).length;
+      count.textContent = `${n}건 선택됨`;
+      if (isExecuteBar) {
+        execBtn.disabled = n === 0;
+      } else {
+        bar.style.display = n === 0 ? 'none' : 'flex';
+      }
+      if (selectAll) selectAll.checked = n > 0 && n === checks.length;
+    }
+
+    checks.forEach((c) => c.addEventListener('change', refresh));
+
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        checks.forEach((c) => { c.checked = selectAll.checked; });
+        refresh();
+      });
+    }
+
+    // 서버별/OS별 선택 - 골라둔 값과 일치하는 체크박스를 추가로 체크한다 (기존 선택 유지, 덮어쓰지 않음)
+    const quickServer = document.getElementById('quickPickServer');
+    const quickOs = document.getElementById('quickPickOs');
+    const clearBtn = document.getElementById('bulkClear');
+
+    function checkMatching(attr, value) {
+      if (!value) return;
+      checks.forEach((c) => { if (c.dataset[attr] === value) c.checked = true; });
+      refresh();
+    }
+    if (quickServer) quickServer.addEventListener('change', () => {
+      checkMatching('server', quickServer.value);
+      quickServer.value = '';
+    });
+    if (quickOs) quickOs.addEventListener('change', () => {
+      checkMatching('os', quickOs.value);
+      quickOs.value = '';
+    });
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      checks.forEach((c) => { c.checked = false; });
+      refresh();
+    });
+
+    refresh();
+  })();
+</script>
 {% endblock %}

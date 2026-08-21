@@ -11,6 +11,11 @@
 
 {% block content %}
 <div class="panel reveal servers-responsive">
+  <form method="get" class="filter-bar" style="margin-bottom:18px">
+    <input type="text" name="q" placeholder="호스트명 또는 IP로 검색" value="{{ q }}">
+    <button class="btn btn-ghost btn-sm" type="submit">검색</button>
+    {% if q %}<a class="btn btn-ghost btn-sm" href="{{ url_for('servers.list_servers') }}">초기화</a>{% endif %}
+  </form>
   <div class="table-scroll">
   <table class="data data-compact">
     <thead>
@@ -21,7 +26,7 @@
     </thead>
     <tbody>
       {% for row in rows %}
-      <tr>
+      <tr class="row-clickable" data-href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">
         <td class="col-narrow mono">
           <a href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">{{ row.server.hostname }}</a>
           {% if not row.server.ssh_key_path %}<span class="pill pill-warn pill-xs" title="Ansible 인벤토리에서 제외됨">SSH 미설정</span>{% endif %}
@@ -52,7 +57,7 @@
   <!-- 창 폭이 좁으면(모바일/좁은 패널) 표 대신 카드로 쌓아서 옆으로 스크롤할 필요가 없게 한다. -->
   <div class="server-card-list">
     {% for row in rows %}
-    <div class="server-list-card">
+    <div class="server-list-card row-clickable" data-href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">
       <div class="server-list-card-top">
         <a class="mono" href="{{ url_for('servers.server_detail', server_id=row.server.id) }}">{{ row.server.hostname }}</a>
         <span class="pill pill-{{ row.color }} pill-xs">{{ row.grade }} · {{ row.level }}점</span>
